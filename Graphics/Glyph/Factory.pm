@@ -10,7 +10,7 @@ my %GENERIC_OPTIONS = (
 		       fgcolor    => 'black',
 		       fontcolor  => 'black',
 		       font2color => 'turquoise',
-		       height     => 10,
+		       height     => 8,
 		       font       => gdSmallFont,
 		       bump       => +1,       # bump by default (perhaps a mistake?)
 		       connector  => 'none',
@@ -128,6 +128,17 @@ sub option {
   }
 
   return $GENERIC_OPTIONS{$option_name};
+}
+
+# return names of all the options in the option hashes
+sub options {
+  my $self = shift;
+  my %options;
+  if (my $map    = $self->option_map) {
+    $options{lc($_)}++ foreach keys %$map;
+  }
+  $options{lc($_)}++ foreach keys %GENERIC_OPTIONS;
+  return keys %options;
 }
 
 1;

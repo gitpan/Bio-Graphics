@@ -1,5 +1,5 @@
 package Bio::Graphics::FeatureFile;
-# $Id: FeatureFile.pm,v 1.5 2001/11/19 04:00:53 lstein Exp $
+# $Id: FeatureFile.pm,v 1.13 2002/01/20 20:07:02 lstein Exp $
 
 # This package parses and renders a simple tab-delimited format for features.
 # It is simpler than GFF, but still has a lot of expressive power.
@@ -11,13 +11,25 @@ use strict;
 use Bio::Graphics::Feature;
 use Carp;
 use IO::File;
+use Text::Shellwords;
 use vars '$VERSION';
 $VERSION = '1.01';
+
+# default colors for unconfigured features
+my @COLORS = qw(cyan blue red yellow green wheat turquoise orange);
+use constant WIDTH => 600;
+
+# args array:
+# -file => parse from a file (- allowed for ARGV)
+# -text => parse from a text scalar
+# -map_coords => code ref to do coordinate mapping
+#                called with ($ref,[$start1,$stop1],[$start2,$stop2]...)
+#                returns     ($newref,$new_coord1,$new_coord2...)
 
 sub new {
   my $class = shift;
   my %args  = @_;
-  my $self = bless { 
+  my $self = bless {
 		    config   => {},
 		    features => {},
 		    groups   => {},
@@ -25,7 +37,12 @@ sub new {
 		    types    => [],
 		    max      => undef,
 		    min      => undef,
+		    stat     => [],
+		    refs     => {},
 		   },$class;
+  $self->{coordinate_mapper} = $args{-map_coords} 
+    if exists $args{-map_coords} && ref($args{-map_coords}) eq 'CODE';
+  $self->{smart_features}    = $args{-smart_features} if exists $args{-smart_features};
 
   # call with
   #   -file
@@ -54,6 +71,12 @@ sub error {
   $d;
 }
 
+sub smart_features {
+  my $self = shift;
+  my $d = $self->{smart_features};
+  $self->{smart_features} = shift if @_;
+  $d;
+}
 
 sub parse_argv {
   my $self = shift;
@@ -68,7 +91,8 @@ sub parse_argv {
 
 sub parse_file {
   my $self = shift;
-  my $fh = shift or return;
+  my $fh   = shift or return;
+  $self->_stat($fh);
 
   $self->{seenit} = {};
   while (<$fh>) {
@@ -83,17 +107,28 @@ sub parse_text {
   my $text = shift;
 
   $self->{seenit} = {};
-  foreach (split /\r?\n/,$text) {
+  $self->{features} = {};
+  foreach (split /\r?\n|\r\n?/,$text) {
     $self->parse_line($_);
   }
   $self->consolidate_groups;
+  delete $self->{seenit};
 }
 
 sub parse_line {
   my $self = shift;
   local $_ = shift;
 
+  s/\r//g;  # get rid of carriage returns left over by MS-DOS/Windows systems
+
   return if /^[\#]/;
+
+  if (/^\s+(.+)/ && $self->{current_tag}) { # continuation line
+      my $value = $1;
+      my $cc = $self->{current_config} ||= 'general';       # in case no configuration named
+      $self->{config}{$cc}{$self->{current_tag}} .= ' ' . $value;
+      return;
+  }
 
   if (/^\s*\[([^\]]+)\]/) {  # beginning of a configuration section
      my $label = $1;
@@ -103,20 +138,12 @@ sub parse_line {
      return;
   }
 
-  if (/^([\w ]+?)\s*=\s*(.+)/) {   # key value pair within a configuration section
+  if (/^([\w ]+?)\s*=\s*(.*)/) {   # key value pair within a configuration section
     my $tag = lc $1;
     my $cc = $self->{current_config} ||= 'general';       # in case no configuration named
-    $self->{config}{$cc}{$tag} = $2;
+    $self->{config}{$cc}{$tag} = $2 || '';    # empty string, not undef
     $self->{current_tag} = $tag;
     return;
-  }
-
-
-  if (/^\s+(.+)/ && $self->{current_tag}) { # continuation line
-      my $value = $1;
-      my $cc = $self->{current_config} ||= 'general';       # in case no configuration named
-      $self->{config}{$cc}{$self->{current_tag}} .= ' ' . $value;
-      return;
   }
 
 
@@ -126,37 +153,56 @@ sub parse_line {
   }
 
   # parse data lines
-  my @tokens = split "\t";
+  my @tokens = eval { shellwords($_) };
+  unshift @tokens,'' if /^\s+/;
 
   # close any open group
   undef $self->{grouptype} if length $tokens[0] > 0;
 
-  if (@tokens < 4) {      # short line; assume a group identifier
+  if (@tokens < 3) {      # short line; assume a group identifier
     $self->{grouptype}     = shift @tokens;
     $self->{groupname}     = shift @tokens;
     return;
   }
 
-  my($type,$name,$strand,$bounds,$description);
+  my($ref,$type,$name,$strand,$bounds,$description,$url);
 
-  if (@tokens >= 8) { # conventional GFF file; notice that the ref is ignored
-    my ($ref,$source,$method,$start,$stop,$score,$s,$phase,$group) = @tokens;
+  if (@tokens >= 8) { # conventional GFF file
+    my ($r,$source,$method,$start,$stop,$score,$s,$phase,@rest) = @tokens;
+    my $group = join ' ',@rest;
     $type   = join(':',$method,$source);
     $bounds = join '..',$start,$stop;
     $strand = $s;
     if ($group) {
-      my $notes;
+      my ($notes,@notes);
       (undef,$self->{groupname},undef,undef,$notes) = split_group($group);
-      $description = join '; ',@$notes if @$notes;
+      foreach (@$notes) {
+	if (m!^(http|ftp)://!) { $url = $_ } else { push @notes,$_ }
+      }
+      $description = join '; ',@notes if @notes;
     }
     $name ||= $self->{groupname};
+    $ref = $r;
   }
 
-  else { # simplified version
-    ($type,$name,$strand,$bounds,$description) = @tokens;
+  elsif ($tokens[2] =~ /^([+-.]|[+-]?[01])$/) { # old simplified version
+    ($type,$name,$strand,$bounds,$description,$url) = @tokens;
+  } else {                              # new simplified version
+    ($type,$name,$bounds,$description,$url) = @tokens;
   }
 
   $type ||= $self->{grouptype};
+  $type =~ s/\s+$//;  # get rid of excess whitespace
+
+  # the reference is specified by the GFF reference line first,
+  # the last reference line we saw second,
+  # or the reference line in the "general" section.
+  {
+    local $^W = 0;
+    $ref  ||= $self->{config}{$self->{current_config}}{'reference'}
+      || $self->{config}{general}{reference};
+  }
+  $self->{refs}{$ref}++ if defined $ref;
 
   my @parts = map { [/(-?\d+)(?:-|\.\.)(-?\d+)/]} split /(?:,| )\s*/,$bounds;
 
@@ -165,22 +211,37 @@ sub parse_line {
     $self->{max} = $_->[1] if !defined $self->{max} || $_->[1] > $self->{max};
   }
 
+  if ($self->{coordinate_mapper} && $ref) {
+    ($ref,@parts) = $self->{coordinate_mapper}->($ref,@parts);
+    return unless $ref;
+  }
+
   # either create a new feature or add a segment to it
   if (my $feature = $self->{seenit}{$type,$name}) {
     $feature->add_segment(@parts);
   } else {
     $feature = $self->{seenit}{$type,$name} = Bio::Graphics::Feature->new(-name     => $name,
 									  -type     => $type,
-									  -strand   => make_strand($strand),
+									  $strand ? (-strand   => make_strand($strand))
+                                                                                  : (),
 									  -segments => \@parts,
-									  -source => $description
+									  -source   => $description,
+									  -ref      => $ref,
+									  -url      => $url,
 									 );
+    $feature->configurator($self) if $self->smart_features;
     if ($self->{grouptype}) {
       push @{$self->{groups}{$self->{grouptype}}{$self->{groupname}}},$feature;
     } else {
       push @{$self->{features}{$type}},$feature;
     }
   }
+}
+
+# break circular references
+sub destroy {
+  my $self = shift;
+  delete $self->{features};
 }
 
 # return configuration information
@@ -192,12 +253,27 @@ sub setting {
   return $config->{$_[0]}{$_[1]}  if @_ > 1;
 }
 
+sub code_setting {
+  my $self = shift;
+  my $section = shift;
+  my $option  = shift;
+
+  my $setting = $self->setting($section=>$option);
+  return unless defined $setting;
+  return $setting if ref($setting) eq 'CODE';
+  return $setting unless $setting =~ /^sub\s+\{/;
+  my $coderef = eval $setting;
+  warn $@ if $@;
+
+  return $self->{$section}{$option} = $coderef;
+}
+
 # turn configuration into a set of -name=>value pairs suitable for add_track()
 sub style {
   my $self = shift;
   my $type = shift;
 
-  my $config  = $self->{config} or return; 
+  my $config  = $self->{config}  or return;
   my $hashref = $config->{$type} or return;
 
   return map {("-$_" => $hashref->{$_})} keys %$hashref;
@@ -307,6 +383,162 @@ sub split_group {
   return ($gclass,$gname,$tstart,$tstop,\@notes);
 }
 
+# render our features onto a panel using configuration data
+# return the number of tracks inserted
+sub render {
+  my $self = shift;
+  my $panel = shift;
+  my ($position_to_insert,$options) = @_;
+
+  $panel ||= $self->new_panel;
+
+  # count up number of tracks inserted
+  my $tracks = 0;
+  my $color;
+  my %types = map {$_=>1} $self->configured_types;
+
+  my @configured_types   = grep {exists $self->features->{$_}} $self->configured_types;
+  my @unconfigured_types = sort grep {!exists $types{$_}}      $self->types;
+
+  my @base_config = $self->style('general');
+
+  $options ||= 0;
+  my @override = ();
+  push @override,(-bump => 1) if $options >= 1;
+  push @override,(-label =>1) if $options >= 2;
+
+  for my $type (@configured_types,@unconfigured_types) {
+    my @config = ( -glyph   => 'segments',         # really generic
+		   -bgcolor => $COLORS[$color++ % @COLORS],
+		   -label   => 1,
+		   -key     => $type,
+		   @base_config,         # global
+		   $self->style($type),  # feature-specificp
+		   @override,
+		 );
+    my $features = $self->features($type);
+    if (defined($position_to_insert)) {
+      $panel->insert_track($position_to_insert++,$features,@config);
+    } else {
+      $panel->add_track($features,@config);
+    }
+    $tracks++;
+  }
+  $tracks;
+}
+
+# create a panel if needed
+sub new_panel {
+  my $self = shift;
+
+  # general configuration of the image here
+  my $width         = $self->setting(general => 'pixels')
+                      || $self->setting(general => 'width')
+			|| WIDTH;
+
+  my ($start,$stop);
+  my $range_expr = '(-?\d+)(?:-|\.\.)(-?\d+)';
+
+  if (my $bases = $self->setting(general => 'bases')) {
+    ($start,$stop) =  $bases =~ /([\d-]+)(?:-|\.\.)([\d-]+)/;
+  }
+
+  if (!defined $start || !defined $stop) {
+    $start = $self->min unless defined $start;
+    $stop  = $self->max unless defined $stop;
+  }
+
+  my $new_segment = Bio::Graphics::Feature->new(-start=>$start,-stop=>$stop);
+  my $panel = Bio::Graphics::Panel->new(-segment   => $new_segment,
+					-width     => $width,
+					-key_style => 'between');
+  $panel;
+}
+
+sub _stat {
+  my $self = shift;
+  my $fh   = shift;
+  $self->{stat} = [stat($fh)];
+}
+
+sub mtime { shift->{stat}->[9];  }
+sub atime { shift->{stat}->[8];  }
+sub ctime { shift->{stat}->[10]; }
+sub size  { shift->{stat}->[7];  }
+sub refs {
+  my $self = shift;
+  my $refs = $self->{refs} or return;
+  keys %$refs;
+}
+
+sub feature2label {
+  my $self = shift;
+  my $feature = shift;
+  my $type  = $feature->type;
+  my $label = $self->type2label($type) || $self->type2label($feature->primary_tag) || $type;
+  $label;
+}
+
+sub make_link {
+  my $self     = shift;
+  my $feature  = shift;
+  my $label    = $self->feature2label($feature) or return;
+  my $link     = $self->setting($label,'link');
+  $link        = $self->setting(general=>'link') unless defined $link;
+  return unless $link;
+  return $self->link_pattern($link,$feature);
+}
+
+sub link_pattern {
+  my $self = shift;
+  my ($pattern,$feature) = @_;
+  $pattern =~ s/\$(\w+)/
+    $1 eq 'name'   ? $feature->name
+      : $1 eq 'class'  ? $feature->class
+      : $1 eq 'type'   ? $feature->method
+      : $1 eq 'method' ? $feature->method
+      : $1 eq 'source' ? $feature->source
+      : $1
+       /exg;
+  return $pattern;
+}
+
+# given a feature type, return its label
+sub type2label {
+  my $self = shift;
+  my $type = shift;
+  $self->{_type2label} ||= $self->invert_types;
+  $self->{_type2label}{$type};
+}
+
+sub invert_types {
+  my $self = shift;
+  my $config  = $self->{config} or return;
+  my %inverted;
+  for my $label (keys %{$config}) {
+    my $feature = $config->{$label}{feature} or next;
+    foreach (shellwords($feature)) {
+      $inverted{$_} = $label;
+    }
+  }
+  \%inverted;
+}
+
+# This routine returns the "citation" field.  It is here in order to simplify the logic
+# a bit in the generic browser
+sub citation {
+  my $self = shift;
+  my $feature = shift || 'general';
+  return $self->setting($feature=>'citation');
+}
+
+# give this feature file a nickname
+sub name {
+  my $self = shift;
+  my $d = $self->{name};
+  $self->{name} = shift if @_;
+  $d;
+}
 
 1;
 
@@ -323,29 +555,29 @@ It is simpler than GFF, but still has a lot of expressive power.
 
 Documentation is pending, but see the file format here, and eg/feature_draw.pl for an
 example of usage.
- 
+
  # file begins
  [general]
  pixels = 1024
  bases = 1-20000
  height = 12
- 
+
  [Cosmid]
  glyph = segments
  fgcolor = blue
  key = C. elegans conserved regions
- 
+
  [EST]
  glyph = segments
  bgcolor= yellow
  connector = dashed
  height = 5;
- 
+
  [FGENESH]
  glyph = transcript2
  bgcolor = green
  description = 1
- 
+
  Cosmid	B0511	+	516-619
  Cosmid	B0511	+	3185-3294
  Cosmid	B0511	+	10946-11208

@@ -1,9 +1,17 @@
 package Bio::Graphics::Glyph::segments;
 
 use strict;
+use Bio::Graphics::Glyph::generic;
 use Bio::Graphics::Glyph::segmented_keyglyph;
 use vars '@ISA';
-@ISA = 'Bio::Graphics::Glyph::segmented_keyglyph';
+@ISA = qw(Bio::Graphics::Glyph::segmented_keyglyph
+	  Bio::Graphics::Glyph::generic);
+
+#sub pad_right {
+#  my $self = shift;
+#  my @parts = $self->parts or return $self->SUPER::pad_right;
+#  $parts[-1]->pad_right;
+#}
 
 # group sets connector to 'solid'
 sub connector {

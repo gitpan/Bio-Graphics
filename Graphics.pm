@@ -1,8 +1,10 @@
+package Bio::Graphics;
+
 use Bio::Graphics::Panel;
 use strict;
 
 use vars '$VERSION';
-$VERSION = '0.92';
+$VERSION = '0.96';
 
 
 1;
@@ -50,6 +52,7 @@ Please see Bio::Graphics::Panel for the full API.
 
 =head1 SEE ALSO
 
+L<Bio::Graphics::Panel>,
 L<Bio::Graphics::Glyph>,
 L<Bio::SeqI>,L<Bio::SeqFeatureI>,
 L<Bio::Das>,L<GD>

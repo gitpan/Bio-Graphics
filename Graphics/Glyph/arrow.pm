@@ -80,6 +80,7 @@ sub draw_parallel {
 
   # turn on ticks
   if ($self->option('tick')) {
+      local $^W = 0;  # dumb uninitialized variable warning
     my $font = $self->font;
     my $width      = $font->width;
     my $font_color = $self->fontcolor;
@@ -116,7 +117,8 @@ sub draw_parallel {
 	$label = sprintf($format,$scaled);
       }
       my $middle = $tickpos - (length($label) * $width)/2;
-      $gd->string($font,$middle,$center+$a2-1,$label,$font_color);
+      $gd->string($font,$middle,$center+$a2-1,$label,$font_color)
+        unless ($self->option('no_tick_label'));
     }
 
     if ($self->option('tick') >= 2) {

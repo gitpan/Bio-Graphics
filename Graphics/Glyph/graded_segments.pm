@@ -21,6 +21,7 @@ sub draw {
     $max_score = 0;
     for my $part (@parts) {
       my $s = eval { $part->feature->score };
+      next unless defined $s;
       $max_score = $s if $s > $max_score;
     }
   }
@@ -43,6 +44,14 @@ sub draw {
   }
 
   $self->SUPER::draw(@_);
+}
+
+sub subseq {
+  my $class = shift;
+  my $feature = shift;
+  return $feature->segments        if $feature->can('segments');
+  return $feature->sub_SeqFeature  if $feature->can('sub_SeqFeature');
+  return;
 }
 
 # synthesize a key glyph

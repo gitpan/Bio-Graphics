@@ -29,22 +29,25 @@ sub new {
   my @subfeatures = $self->subseq($feature);
 
   if (@subfeatures) {
-    
+
     # dynamic glyph resolution
-    @subglyphs = sort { $a->left  <=> $b->left }  $factory->make_glyph(@subfeatures);  
+    @subglyphs = sort { $a->left  <=> $b->left }  $factory->make_glyph(@subfeatures);
 
     $self->{parts}   = \@subglyphs;
   }
 
   if (defined $self->start && defined $self->stop) {
-    my ($left,$right) = $factory->map_pt($self->start,$self->stop);
-    ($left,$right) = ($right,$left) if $left > $right;  # paranoia
-    $self->{left}    = $left;
-    $self->{width}   = $right - $left + 1;
-  } else {
-    $self->{left}    = $subglyphs[0]->{left};
-    my $right        = (sort { $b<=>$a } map {$_->right} @subglyphs)[0];
-    $self->{width}   = $right - $self->{left} + 1;
+      my ($left,$right) = $factory->map_pt($self->start,$self->stop);
+      ($left,$right) = ($right,$left) if $left > $right;  # paranoia
+      $self->{left}    = $left;
+      $self->{width}   = $right - $left + 1;
+  } 
+  if (@subglyphs) {
+      my $l            = $subglyphs[0]->left;
+      $self->{left}    = $l if !defined($self->{left}) || $l < $self->{left};
+      my $right        = (sort { $b<=>$a } map {$_->right} @subglyphs)[0];
+      my $w            = $right - $self->{left} + 1;
+      $self->{width}   = $w if !defined($self->{width}) || $w > $self->{width};
   }
 
   #Handle glyphs that don't actually fill their space, but merely mark a point.
@@ -133,13 +136,15 @@ sub top {
 }
 sub left {
   my $self = shift;
-  return $self->{cache_left} if exists $self->{cache_left};
-  $self->{cache_left} = $self->{left} - $self->pad_left;
+#  return $self->{cache_left} if exists $self->{cache_left};
+#  $self->{cache_left} = $self->{left} - $self->pad_left;
+  return $self->{left} - $self->pad_left;
 }
 sub right {
   my $self = shift;
-  return $self->{cache_right} if exists $self->{cache_right};
-  $self->{cache_right} = $self->left + $self->layout_width - 1;
+#  return $self->{cache_right} if exists $self->{cache_right};
+#  $self->{cache_right} = $self->left + $self->layout_width - 1;
+  return $self->left + $self->layout_width - 1;
 }
 sub bottom {
   my $self = shift;
@@ -163,8 +168,8 @@ sub layout_height {
 }
 sub layout_width {
   my $self = shift;
-  $self->{layout_width} ||= $self->width + $self->pad_left + $self->pad_right;
-  return $self->{layout_width};
+#  return $self->{layout_width} ||= $self->width + $self->pad_left + $self->pad_right;
+  return $self->width + $self->pad_left + $self->pad_right;
 }
 
 # returns the rectangle that surrounds the physical part of the
@@ -181,22 +186,22 @@ sub bounds {
    $dy + $self->bottom - $self->pad_bottom);
 }
 
+
+
 sub box {
   my $self = shift;
-  my $gd = shift;
+  return ($self->left,$self->top,$self->right,$self->bottom);
+}
 
-  #doing double duty now.
-  unless ($gd) {
-    return ($self->left,$self->top,$self->right,$self->bottom);
-  }
 
+sub unfilled_box {
+  my $self = shift;
+  my $gd   = shift;
   my ($x1,$y1,$x2,$y2) = @_;
 
   my $fg = $self->fgcolor;
   my $bg = $self->bgcolor;
   my $linewidth = $self->option('linewidth') || 1;
-
-#  $gd->rectangle($x1,$y1,$x2,$y2,$bg);
 
   $fg = $self->set_pen($linewidth,$fg) if $linewidth > 1;
 
@@ -215,6 +220,7 @@ sub box {
   $gd->line($x2,$y1+$linewidth,$x2,$y2-$linewidth,$bg)
     if $x2 > $width - $self->panel->pad_right;
 }
+
 
 # return boxes surrounding each part
 sub boxes {
@@ -252,7 +258,14 @@ sub pad_left {
 }
 sub pad_right {
   my $self = shift;
-  return 0;
+# this shouldn't be necessary
+  my @parts = $self->parts or return 0;
+  my $max = 0;
+  foreach (@parts) {
+    my $pr = $_->pad_right;
+    $max = $pr if $max < $pr;
+  }
+  $max;
 }
 
 # move relative to parent
@@ -396,7 +409,6 @@ sub layout {
 	$pos += $collision->[3]-$collision->[1] + BUMP_SPACING;                    # collision, so bump
 
       } else {
-#	$pos -= $g->{layout_height} - BUMP_SPACING;
 	$pos -= BUMP_SPACING;
       }
     }
@@ -702,6 +714,17 @@ sub subseq {
 # synthesize a key glyph
 sub keyglyph {
   my $self = shift;
+  my $feature = $self->make_key_feature;
+  my $factory = $self->factory->clone;
+  $factory->set_option(label => 1);
+  $factory->set_option(bump  => 0);
+  $factory->set_option(connector  => 'solid');
+  return $factory->make_glyph($feature);
+}
+
+# synthesize a key glyph
+sub make_key_feature {
+  my $self = shift;
 
   my $scale = 1/$self->scale;  # base pairs/pixel
 
@@ -714,11 +737,7 @@ sub keyglyph {
 				-end   =>80*$scale+$offset,
 				-name => $self->option('key'),
 				-strand => '+1');
-  my $factory = $self->factory->clone;
-  $factory->set_option(label => 1);
-  $factory->set_option(bump  => 0);
-  $factory->set_option(connector  => 'solid');
-  return $factory->make_glyph($feature);
+  return $feature;
 }
 
 sub all_callbacks {

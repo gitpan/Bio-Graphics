@@ -2,13 +2,15 @@ package Bio::Graphics::Feature;
 use strict;
 
 use vars '$VERSION';
-$VERSION = 1.1;
+$VERSION = 1.2;
 
 *stop        = \&end;
 *info        = \&name;
 *seqname     = \&name;
 *type        = \&primary_tag;
 *exons       = *sub_SeqFeature = *merged_segments = \&segments;
+*class       = *method = \&type;
+*source      = \&source_tag;
 
 # usage:
 # Bio::Graphics::Feature->new(
@@ -35,6 +37,8 @@ sub new {
   $self->{score}   = $arg{-score}  || 0;
   $self->{start}   = $arg{-start};
   $self->{stop}    = $arg{-end} || $arg{-stop};
+  $self->{ref}     = $arg{-ref};
+  $self->{url}     = $arg{-url} if $arg{-url};
 
   # fix start, stop
   if (defined $self->{stop} && defined $self->{start}
@@ -60,6 +64,7 @@ sub add_segment {
   for my $seg (@_) {
     if (ref($seg) eq 'ARRAY') {
       my ($start,$stop) = @{$seg};
+      next unless defined $start && defined $stop;  # fixes an obscure bug somewhere above us
       my $strand = $self->{strand};
 
       if ($start > $stop) {
@@ -93,22 +98,42 @@ sub score    {
   $d;
 }
 sub primary_tag     { shift->{type}        }
-sub strand   { shift->{strand}      }
-sub name     { shift->{name}        }
+sub name            { shift->{name}        }
+sub ref {
+  my $self = shift;
+  my $d = $self->{ref};
+  $self->{ref} = shift if @_;
+  $d;
+}
 sub start    {
   my $self = shift;
-  return $self->{start};
+  my $d = $self->{start};
+  $self->{start} = shift if @_;
+  $d;
 }
 sub end    {
   my $self = shift;
-  return $self->{stop};
+  my $d = $self->{stop};
+  $self->{stop} = shift if @_;
+  $d;
+}
+sub strand { 
+  my $self = shift;
+  my $d = $self->{strand};
+  $self->{strand} = shift if @_;
+  $d;
 }
 sub length {
   my $self = shift;
   return $self->end - $self->start + 1;
 }
 
-sub source_tag { shift->{source} }
+sub source_tag { 
+  my $self = shift;
+  my $d = $self->{source};
+  $self->{source} = shift if @_;
+  $d;
+}
 
 # This probably should be deleted.  Not sure why it's here, but might
 # have been added for Ace::Sequence::Feature-compliance.
@@ -116,6 +141,39 @@ sub introns {
   my $self = shift;
   return;
 }
+
+# get/set the configurator (Bio::Graphics::FeatureFile) for this feature
+sub configurator {
+  my $self = shift;
+  my $d = $self->{configurator};
+  $self->{configurator} = shift if @_;
+  $d;
+}
+
+# get/set the url for this feature
+sub url {
+  my $self = shift;
+  my $d = $self->{url};
+  $self->{url} = shift if @_;
+  $d;
+}
+
+# make a link
+sub make_link {
+  my $self = shift;
+  if (my $url = $self->url) {
+    return $url;
+  }
+
+  elsif (my $configurator = $self->configurator) {
+    return $configurator->make_link($self);
+  }
+
+  else {
+    return;
+  }
+}
+
 
 1;
 

@@ -29,15 +29,18 @@ use Bio::Graphics::FeatureFile;
 use Getopt::Long;
 
 use constant WIDTH => 600;
-my ($WIDTH,$RANGE);
+my ($WIDTH,$RANGE,$BOXES);
 
 GetOptions ('width:i'  => \$WIDTH,
-            'range:s'  => \$RANGE) || die <<USAGE;
+            'range:s'  => \$RANGE,
+	    'boxes'    => \$BOXES,
+	   ) || die <<USAGE;
 Usage: $0 [feature file 1] [feature file 2] ...
 
  Options:
     --width  <pixels>     Set width of image (${\WIDTH} pixels default)
     --range  <start-stop> Set range of region (base pairs, start-stop)
+    --boxes               Draw grey boxes around the features (for debugging)
 
 Render a Bio::Graphics feature file and produce a PNG image.
 See the manual page for Bio::Graphics::FeatureFile for a
@@ -97,7 +100,22 @@ for my $type (@configured_types,@unconfigured_types) {
 }
 
 my $gd = $panel->gd;
+
+if ($BOXES) {  # debugging code
+  my $boxes = $panel->boxes;
+  debugging_rectangles($gd,$boxes);
+}
+
 print $gd->can('gif') ? $gd->gif : $gd->png;
+
+sub debugging_rectangles {
+  my ($image,$boxes) = @_;
+  my $grey = $image->colorClosest(100,100,100);
+  foreach (@$boxes) {
+    my @rect = @{$_}[1,2,3,4];
+    $image->rectangle(@{$_}[1,2,3,4],$grey);
+  }
+}
 
 =head1 NAME
 
@@ -150,8 +168,7 @@ Negative ranges are allowed.
 =head1 Feature Files Format
 
 This script accepts and processes sequence annotations in a simple
-tab-delimited format.  It does not support straight GFF at the current
-time, but it will soon.
+tab-delimited format or in GFF format.
 
 The feature file format has a configuration section and a data
 section. The configuration section sets up the size and overall
@@ -361,6 +378,7 @@ L<Bio::Graphics>
 Lincoln Stein <lstein@cshl.org>
 
 =cut
+
 
 !NO!SUBS!
 close OUT or die "Can't close $file: $!";

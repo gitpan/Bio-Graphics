@@ -10,7 +10,7 @@ use vars '$VERSION';
 $VERSION = '0.91';
 
 use constant KEYLABELFONT => gdMediumBoldFont;
-use constant KEYSPACING   => 10; # extra space between key columns
+use constant KEYSPACING   => 5; # extra space between key columns
 use constant KEYPADTOP    => 5;  # extra padding before the key starts
 use constant KEYCOLOR     => 'wheat';
 use constant KEYSTYLE     => 'bottom';
@@ -160,12 +160,18 @@ sub all_callbacks { shift->{all_callbacks} }
 
 sub add_track {
   my $self = shift;
-  $self->_do_add_track(+1,@_);
+  $self->_do_add_track(scalar(@{$self->{tracks}}),@_);
 }
 
 sub unshift_track {
   my $self = shift;
-  $self->_do_add_track(-1,@_);
+  $self->_do_add_track(0,@_);
+}
+
+sub insert_track {
+  my $self = shift;
+  my $position = shift;
+  $self->_do_add_track($position,@_);
 }
 
 
@@ -173,8 +179,8 @@ sub unshift_track {
 # see Factory.pm for the format of the options
 # The thing returned is actually a generic Glyph
 sub _do_add_track {
-  my $self = shift;
-  my $direction = shift;
+  my $self     = shift;
+  my $position = shift;
 
   # due to indecision, we accept features
   # and/or glyph types in the first two arguments
@@ -219,12 +225,12 @@ sub _do_add_track {
 	  return $glyph_name;
 	};
 
-  $self->_add_track($features,$direction,-map=>$panel_map,-stylesheet=>$ss,-options=>\%options);
+  $self->_add_track($position,$features,-map=>$panel_map,-stylesheet=>$ss,-options=>\%options);
 }
 
 sub _add_track {
   my $self = shift;
-  my ($features,$direction,@options) = @_;
+  my ($position,$features,@options) = @_;
 
   # build the list of features into a Bio::Graphics::Feature object
   $features = [$features] unless ref $features eq 'ARRAY';
@@ -235,7 +241,7 @@ sub _add_track {
     $f = Bio::Graphics::Feature->new(
 				     -segments=>$f,
 				     -type => 'group'
-				       );
+				    );
   }
 
   # top-level glyph is the track
@@ -249,11 +255,7 @@ sub _add_track {
   my $factory = Bio::Graphics::Glyph::Factory->new($self,@options);
   my $track   = $factory->make_glyph($feature);
 
-  if ($direction >= 0) {
-    push @{$self->{tracks}},$track;
-  } else {
-    unshift @{$self->{tracks}},$track;
-  }
+  splice(@{$self->{tracks}},$position,0,$track);
   return $track;
 }
 
@@ -315,7 +317,7 @@ sub gd {
   $offset = $pt;
   for my $track (@{$self->{tracks}}) {
     next unless $track->parts;
-    $offset += $self->draw_between_key($gd,$track,$offset) if $between_key && $track->option('key');;
+    $offset += $self->draw_between_key($gd,$track,$offset) if $between_key && $track->option('key');
     $track->draw($gd,0,$offset,0,1);
     $offset += $track->layout_height + $spacing;
   }
@@ -386,7 +388,16 @@ sub format_key {
     # and their max size
     for my $track (@{$self->{tracks}}) {
       next unless $track->option('key');
-      my $glyph = $track->parts ? ($track->parts)[0]->keyglyph : $track->keyglyph;
+
+      my $glyph;
+      if (my @parts = $track->parts) {
+	$glyph = $parts[0]->keyglyph;
+      } else {
+	my $t = Bio::Graphics::Feature->new(-segments=>[Bio::Graphics::Feature->new(-start=>1,-stop=>1)]);
+	my $g = $track->factory->make_glyph($t);
+	$glyph = $g->keyglyph;
+      }
+
       $tracks{$track} = $glyph;
       my ($h,$w) = ($glyph->layout_height,
 		    $glyph->layout_width);
