@@ -61,70 +61,84 @@ sub draw_parallel {
   my ($x1,$y1,$x2,$y2) = $self->bounds(@_);
 
   my $fg = $self->set_pen;
-  my $a2 = ($y2-$y1)/2;
+  my $a2 = ($self->height)/2;
   my $center = $y1+$a2;
 
-  my $ne = $self->option('northeast');
-  my $sw = $self->option('southwest');
-  # turn on both if neither specified
-  $ne = $sw = 1 unless defined($ne) || defined($sw);
+  $x1 = $self->panel->left  if $x1 < $self->panel->left;
+  $x2 = $self->panel->right if $x2 > $self->panel->right;
 
+  my ($sw,$ne,$base_w,$base_e) = $self->arrowheads;
   $gd->line($x1,$center,$x2,$center,$fg);
-  if ($sw) {  # west arrow
-    $self->arrowhead($gd,$x1,$center,$a2,-1);
-  }
-  if ($ne) {  # east arrow
-    $self->arrowhead($gd,$x2,$center,$a2,+1);
-  }
+  $self->arrowhead($gd,$x1,$center,$a2,-1) if $sw; # west arrow
+  $self->arrowhead($gd,$x2,$center,$a2,+1) if $ne; # east arrow
+  $gd->line($x2,$center-$a2,$x2,$center+$a2,$fg) if $base_e; #east base
+  $gd->line($x1,$center-$a2,$x1,$center+$a2,$fg) if $base_w; #west base
 
   # turn on ticks
   if ($self->option('tick')) {
-    my $left = shift;
-
-    my $scale = $self->scale;
-
-    # figure out tick mark scale
-    # we want no more than 1 tick mark every 30 pixels
-    # and enough room for the labels
     my $font = $self->font;
-    my $width = $font->width;
+    my $width      = $font->width;
     my $font_color = $self->fontcolor;
+    my $height   = $self->height;
 
-    my $interval = 1;
-    my $mindist =  30;
-    my $widest = 5 + (length($self->end) * $width);
-    $mindist = $widest if $widest > $mindist;
+    my $relative = $self->option('relative_coords');
+    my $start    = $relative ? 1 : $self->feature->start;
+    my $stop     = $start + $self->feature->length  - 1;
 
-    while (1) {
-      my $pixels = $interval * $scale;
-      last if $pixels >= $mindist;
-      $interval *= 10;
-    }
+    my $offset   = $relative ? $self->feature->start-1 : 0;
+    my $reversed = $self->feature->strand < 0;
 
-    my $first_tick = $interval * int(0.5 + $self->start/$interval);
-    my $pl = $self->panel->pad_left;
+    my ($major_ticks,$minor_ticks) = $self->panel->ticks($start,$stop,$font);
 
-    for (my $i = $first_tick; $i < $self->end; $i += $interval) {
-      my $tickpos = $left + $self->map_pt($i);
-      $gd->line($tickpos,$center-$a2,$tickpos,$center+$a2,$fg)
-	unless $tickpos <= $pl;
+    ## Does the user want to override the internal scale?
+    my $scale = $self->option('scale');
+
+    my $left  = $sw ? $x1+$height : $x1;
+    my $right = $ne ? $x2-$height : $x2;
+
+    for my $i (@$major_ticks) {
+      my $tickpos = $dx + ($reversed ? $self->map_pt($stop - $i + $offset)
+	                             : $self->map_pt($i + $offset));
+      next if $tickpos < $left or $tickpos > $right;
+      $gd->line($tickpos,$center-$a2,$tickpos,$center+$a2,$fg);
       my $middle = $tickpos - (length($i) * $width)/2;
-      $gd->string($font,$middle,$center+$a2-1,$i,$font_color)
-	unless $middle <= $pl;
+      my $label = $scale ? $i / $scale : $i;
+      $gd->string($font,$middle,$center+$a2-1,$label,$font_color);
     }
 
     if ($self->option('tick') >= 2) {
-      my $a4 = ($y2-$y1)/4;
-      for (my $i = $self->start+$interval/10; $i < $self->end; $i += $interval/10) {
-	my $tickpos = $dx + $self->map_pt($i);
+      my $a4 = $self->height/4;
+      for my $i (@$minor_ticks) {
+	my $tickpos = $dx + ($reversed ? $self->map_pt($stop - $i + $offset)
+	                               : $self->map_pt($i + $offset));
+	next if $tickpos < $left or $tickpos > $right;
 	$gd->line($tickpos,$center-$a4,$tickpos,$center+$a4,$fg);
       }
     }
   }
 
   # add a label if requested
-  $self->draw_label($gd,$dx,$dy) if $self->option('label');
+  $self->draw_label($gd,$dx,$dy)       if $self->option('label');
+  $self->draw_description($gd,$dx,$dy) if $self->option('description');
+}
 
+sub arrowheads {
+  my $self = shift;
+  my ($ne,$sw,$base_e,$base_w);
+  if ($self->option('double')) {
+    $ne = $sw = 1;
+  } else {
+    $ne   = $self->option('northeast') || $self->option('east');
+    $sw   = $self->option('southwest') || $self->option('west');
+  }
+  # otherwise use strandedness to define the arrow
+  unless (defined($ne) || defined($sw)) {
+    # turn on both if neither specified
+    $ne = 1 if $self->feature->strand > 0;
+    $sw = 1 if $self->feature->strand < 0;
+  }
+  return ($sw,$ne,0,0) unless $self->option('base');
+  return ($sw,$ne,!$sw,!$ne);
 }
 
 1;
@@ -153,23 +167,36 @@ options are recognized:
   Option      Description               Default
   ------      -----------               -------
 
-  -tick       Whether to draw major       0
+  -tick       Whether to draw major         0
               and minor ticks.
 	      0 = no ticks
 	      1 = major ticks
 	      2 = minor ticks
 
-  -parallel   Whether to draw the arrow   true
+  -parallel   Whether to draw the arrow     true
 	      parallel to the sequence
 	      or perpendicular to it.
 
-  -northeast  Whether to draw the         true
-	      north or east arrowhead
-	      (depending on orientation)
+  -northeast  Force a north or east         true
+	      arrowhead(depending 
+	      on orientation)
 
-  -southwest  Whether to draw the         true
-	      south or west arrowhead
-	      (depending on orientation)
+  -east       synonym of above
+
+  -southwest  Force a south or west         true
+	      arrowhead(depending 
+	      on orientation)
+
+  -west       synonym of above
+
+  -double     force-doubleheaded arrow
+
+  -base       Draw a vertical base at the   false
+              non-arrowhead side
+
+  -scale      Reset the labels on the arrow false
+              to reflect an externally 
+              established scale.
 
 Set -parallel to false to display a point-like feature such as a
 polymorphism, or to indicate an important location.  If the feature
@@ -183,6 +210,12 @@ Otherwise, there will be two arrows at the start and end:
 
        ^              ^
        |              |
+
+Scale: Pass in a externally established scale to reset the labels on the arrow.  This is particularly useful for manually constructed images where the founding parameters of the panel are not 1-based.  For example, a genetic map interval ranging from 0.1 - 0.3 can be constructed by first multiplying every value by 100. Passing
+
+arrow(-scale=>100);
+
+will draw tick marks labelled appropriately to your external scale.
 
 =head1 BUGS
 

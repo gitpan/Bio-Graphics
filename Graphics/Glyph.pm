@@ -25,26 +25,29 @@ sub new {
   $self->{factory} = $factory;
   $self->{top} = 0;
 
+  my @subglyphs;
+
   if (my @subfeatures = $self->subseq($feature)) {
-    my @subglyphs = sort { $a->left  <=> $b->left }
+    @subglyphs = sort { $a->left  <=> $b->left }
       $factory->make_glyph(@subfeatures);  # dynamic glyph resolution
 
-    $self->{left}    = $subglyphs[0]->{left};
-    my $right        = (sort { $b<=>$a } map {$_->right} @subglyphs)[0];
-    $self->{width}   = $right - $self->{left} + 1;
     $self->{parts}   = \@subglyphs;
   }
 
-  else {
+  if (defined $self->start && defined $self->stop) {
     my ($left,$right) = $factory->map_pt($self->start,$self->stop);
     ($left,$right) = ($right,$left) if $left > $right;  # paranoia
     $self->{left}    = $left;
     $self->{width}   = $right - $left + 1;
+  } else {
+    $self->{left}    = $subglyphs[0]->{left};
+    my $right        = (sort { $b<=>$a } map {$_->right} @subglyphs)[0];
+    $self->{width}   = $right - $self->{left} + 1;
   }
 
-  #Glyphs that don't actually fill their space, but merely mark a point.
+  #Handle glyphs that don't actually fill their space, but merely mark a point.
   #They need to have their collision bounds altered.  We will (for now)
-  #hard code them to be in the center or their feature.
+  #hard code them to be in the center of their feature.
   $self->{point} = $arg{-point} ? $self->height : undef;
   if($self->option('point')){
     my ($left,$right) = $factory->map_pt($self->start,$self->stop);
@@ -74,11 +77,25 @@ sub start   {
   my $self = shift;
   return $self->{start} if exists $self->{start};
   $self->{start} = $self->{feature}->start;
+
+  # handle the case of features whose endpoints are undef
+  # (this happens with wormbase clones where one or more clone end is not defined)
+  # in this case, we set the start to one minus the beginning of the panel
+  $self->{start} = $self->panel->offset - 1 unless defined $self->{start};
+
+  return $self->{start};
 }
 sub stop    {
   my $self = shift;
   return $self->{stop} if exists $self->{stop};
-  $self->{stop} = $self->{feature}->stop;
+  $self->{stop} = $self->{feature}->end;
+
+  # handle the case of features whose endpoints are undef
+  # (this happens with wormbase clones where one or more clone end is not defined)
+  # in this case, we set the start to one plus the end of the panel
+  $self->{stop} = $self->panel->offset + $self->panel->length + 1 unless defined $self->{stop};
+
+  return $self->{stop}
 }
 sub end     { shift->stop }
 sub map_pt  { shift->{factory}->map_pt(@_) }
@@ -99,7 +116,7 @@ sub add_feature {
 # link a set of features together so that they bump as a group
 sub add_group {
   my $self = shift;
-  my @features = @_;
+  my @features = ref($_[0]) eq 'ARRAY' ? @{$_[0]} : @_;
   my $f    = Bio::Graphics::Feature->new(
 				     -segments=>\@features,
 				     -type => 'group'
@@ -206,7 +223,7 @@ sub boxes {
 
   $self->layout;
   for my $part ($self->parts) {
-    if ($part->feature->type eq 'group') {
+    if (eval{$part->feature->primary_tag} eq 'group') {
       push @result,$part->boxes($left+$self->left,$top+$self->top);
     } else {
       my ($x1,$y1,$x2,$y2) = $part->box;
@@ -257,6 +274,19 @@ sub option {
   $factory->option($self,$option_name,@{$self}{qw(partno total_parts)});
 }
 
+# set an option globally
+sub configure {
+  my $self = shift;
+  my $factory = $self->factory;
+  my $option_map = $factory->option_map;
+  while (@_) {
+    my $option_name  = shift;
+    my $option_value = shift;
+    ($option_name = lc $option_name) =~ s/^-//;
+    $option_map->{$option_name} = $option_value;
+  }
+}
+
 # some common options
 sub color {
   my $self = shift;
@@ -280,11 +310,18 @@ sub bump {
   return $self->option('bump');
 }
 
+# we also look for the "color" option for Ace::Graphics compatibility
 sub fgcolor {
-  shift->color('fgcolor');
+  my $self = shift;
+  my $index = $self->option('fgcolor') || $self->option('color') || return 0;
+  $self->factory->translate_color($index);
 }
+
+# we also look for the "background-color" option for Ace::Graphics compatibility
 sub bgcolor {
-  shift->color('bgcolor');
+  my $self = shift;
+  my $index = $self->option('fillcolor') || $self->option('bgcolor') || return 0;
+  $self->factory->translate_color($index);
 }
 sub font {
   shift->option('font');
@@ -297,7 +334,11 @@ sub font2color {
   my $self = shift;
   $self->color('font2color') || $self->fontcolor;
 }
-sub tkcolor { shift->color('tkcolor') } # "track color"
+sub tkcolor { # "track color"
+  my $self = shift;
+  $self->option('tkcolor') or return;
+  return $self->color('tkcolor')
+} 
 sub connector_color {
   my $self = shift;
   $self->color('connector_color') || $self->fgcolor;
@@ -383,8 +424,15 @@ sub draw {
     my $connector =  $self->connector;
     my $x = $left;
     my $y = $top  + $self->top + $self->pad_top;
+
+    my $last_x;
     for (my $i=0; $i<@parts; $i++) {
-      $parts[$i]->draw($gd,$x,$y,$i,scalar(@parts));
+      # lie just a little bit to avoid lines overlapping and
+      # make the picture prettier
+      my $fake_x = $x;
+      $fake_x-- if defined $last_x && $parts[$i]->left - $last_x <= 1;
+      $parts[$i]->draw($gd,$fake_x,$y,$i,scalar(@parts));
+      $last_x = $parts[$i]->right;
     }
     $self->draw_connectors($gd,$x,$y) if $connector;
   } else {  # no part
@@ -398,21 +446,34 @@ sub draw_connectors {
   my ($dx,$dy) = @_;
   my @parts = sort { $a->left <=> $b->left } $self->parts;
   for (my $i = 0; $i < @parts-1; $i++) {
-    my($xl,$xt,$xr,$xb) = $parts[$i]->bounds;
-    my($yl,$yt,$yr,$yb) = $parts[$i+1]->bounds;
+    $self->_connector($gd,$dx,$dy,$parts[$i]->bounds,$parts[$i+1]->bounds);
+  }
 
+  if (1) { # this is working, but it's a bit awkward
+    my($x1,$y1,$x2,$y2) = $self->bounds(0,0);
+    my($xl,$xt,$xr,$xb) = $parts[0]->bounds;
+    $self->_connector($gd,$dx,$dy,$x1,$xt,$x1,$xb,$xl,$xt,$xr,$xb);
+    ($xl,$xt,$xr,$xb) = $parts[-1]->bounds;
+    $self->_connector($gd,$dx,$dy,$parts[-1]->bounds,$x2,$xt,$x2,$xb);
+  }
+
+}
+
+sub _connector {
+  my $self = shift;
+  my ($gd,$dx,$dy,$xl,$xt,$xr,$xb,$yl,$yt,$yr,$yb) = @_;
     my $left   = $dx + $xr;
     my $right  = $dx + $yl;
     my $top1     = $dy + $xt;
     my $bottom1  = $dy + $xb;
     my $top2     = $dy + $yt;
     my $bottom2  = $dy + $yb;
+    return unless $right-$left >= 1;
 
     $self->draw_connector($gd,
 			  $top1,$bottom1,$left,
 			  $top2,$bottom2,$right,
 			 );
-  }
 }
 
 sub draw_connector {
@@ -486,10 +547,10 @@ sub draw_dashed_connector {
 sub filled_box {
   my $self = shift;
   my $gd = shift;
-  my ($x1,$y1,$x2,$y2) = @_;
+  my ($x1,$y1,$x2,$y2,$bg,$fg) = @_;
 
-  my $fg = $self->fgcolor;
-  my $bg = $self->bgcolor;
+  $bg ||= $self->bgcolor;
+  $fg ||= $self->fgcolor;
   my $linewidth = $self->option('linewidth') || 1;
 
   $gd->filledRectangle($x1,$y1,$x2,$y2,$bg);
@@ -515,18 +576,19 @@ sub filled_box {
 sub filled_oval {
   my $self = shift;
   my $gd = shift;
-  my ($x1,$y1,$x2,$y2) = @_;
+  my ($x1,$y1,$x2,$y2,$bg,$fg) = @_;
   my $cx = ($x1+$x2)/2;
   my $cy = ($y1+$y2)/2;
 
-  my $fg = $self->fgcolor;
+  $fg ||= $self->fgcolor;
+  $bg ||= $self->bgcolor;
   my $linewidth = $self->linewidth;
 
   $fg = $self->set_pen($linewidth) if $linewidth > 1;
   $gd->arc($cx,$cy,$x2-$x1,$y2-$y1,0,360,$fg);
 
   # and fill it
-  $gd->fill($cx,$cy,$self->bgcolor);
+  $gd->fill($cx,$cy,$bg);
 }
 
 sub oval {
@@ -541,6 +603,42 @@ sub oval {
 
   $fg = $self->set_pen($linewidth) if $linewidth > 1;
   $gd->arc($cx,$cy,$x2-$x1,$y2-$y1,0,360,$fg);
+}
+
+sub filled_arrow {
+  my $self = shift;
+  my $gd  = shift;
+  my $orientation = shift;
+
+  my ($x1,$y1,$x2,$y2) = @_;
+  my ($width) = $gd->getBounds;
+  my $indent = $y2-$y1 < $x2-$x1 ? $y2-$y1 : ($x2-$x1)/2;
+
+  return $self->filled_box($gd,@_)
+    if ($orientation == 0)
+      or ($x1 < 0 && $orientation < 0)
+        or ($x2 > $width && $orientation > 0)
+	  or ($indent <= 0)
+	    or ($x2 - $x1 < 3);
+
+  my $fg = $self->fgcolor;
+  if ($orientation >= 0) {
+    $gd->line($x1,$y1,$x2-$indent,$y1,$fg);
+    $gd->line($x2-$indent,$y1,$x2,($y2+$y1)/2,$fg);
+    $gd->line($x2,($y2+$y1)/2,$x2-$indent,$y2,$fg);
+    $gd->line($x2-$indent,$y2,$x1,$y2,$fg);
+    $gd->line($x1,$y2,$x1,$y1,$fg);
+    $gd->fillToBorder($x1+1,($y1+$y2)/2,$fg,$self->bgcolor);
+  } else {
+    $gd->line($x1,($y2+$y1)/2,$x1+$indent,$y1,$fg);
+    $gd->line($x1+$indent,$y1,$x2,$y1,$fg);
+    $gd->line($x2,$y2,$x1+$indent,$y2,$fg);
+    $gd->line($x1+$indent,$y2,$x1,($y1+$y2)/2,$fg);
+    $gd->line($x2,$y1,$x2,$y2,$fg);
+    if ($x2 > 0 && $x2<=$self->panel->right) {
+       $gd->fillToBorder($x2-1,($y1+$y2)/2,$fg,$self->bgcolor);
+    }
+  }
 }
 
 sub linewidth {
@@ -567,11 +665,21 @@ sub set_pen {
 sub draw_component {
   my $self = shift;
   my $gd = shift;
-  my ($left,$top) = @_;
   my($x1,$y1,$x2,$y2) = $self->bounds(@_);
-  $self->filled_box($gd,
-		    $x1, $y1,
-		    $x2, $y2);
+
+  # clipping
+  my $panel = $self->panel;
+  return unless $x2 >= $panel->left and $x1 <= $panel->right;
+
+  if ($self->option('strand_arrow')) {
+    $self->filled_arrow($gd,$self->feature->strand,
+			$x1, $y1,
+			$x2, $y2)
+  } else {
+    $self->filled_box($gd,
+		      $x1, $y1,
+		      $x2, $y2)
+  }
 }
 
 sub subseq {
@@ -693,6 +801,17 @@ be changed once it is set.
 Get the sequence feature associated with this object.  This cannot be
 changed once it is set.
 
+=item $feature = $glyph->add_feature(@features)
+
+Add the list of features to the glyph, creating subparts.  This is
+most common done with the track glyph returned by
+Ace::Graphics::Panel->add_track().
+
+=item $feature = $glyph->add_group(@features)
+
+This is similar to add_feature(), but the list of features is treated
+as a group and can be configured as a set.
+
 =back
 
 Retrieving glyph options:
@@ -746,6 +865,17 @@ Return the value of the indicated option.
 =item $index = $glyph->color($color)
 
 Given a symbolic or #RRGGBB-form color name, returns its GD index.
+
+=back
+
+Setting an option:
+
+=over 4
+
+=item $glyph->configure(-name=>$value)
+
+You may change a glyph option after it is created using set_option().
+This is most commonly used to configure track glyphs.
 
 =back
 
@@ -900,9 +1030,24 @@ glyph pages for more options.
 
   -label      Whether to draw a label	false
 
-You may pass an anonymous subroutine to -label, in which case the
-subroutine will be invoked with the feature as its single argument.
-The subroutine must return a string to render as the label.
+  -description Whether to draw a description false
+
+The label is printed above the glyph.  You may pass an anonymous
+subroutine to -label, in which case the subroutine will be invoked
+with the feature as its single argument.  The subroutine must return a
+string to render as the label.  Otherwise, you may return the number
+"1", in which case the feature's info(), seqname() and primary_tag()
+methods will be called (in that order) until a suitable name is found.
+
+The description is printed below the glyph.  You may pass an anonymous
+subroutine to -label, in which case the subroutine will be invoked
+with the feature as its single argument.  The subroutine must return a
+string to render as the label.  Otherwise, you may return the number
+"1", in which case the feature's source_tag() method will be invoked.
+
+In the case of ACEDB Ace::Sequence feature objects, the feature's
+info(), Brief_identification() and Locus() methods will be called to
+create a suitable description.
 
 =head1 SUBCLASSING Bio::Graphics::Glyph
 

@@ -1,14 +1,17 @@
 package Bio::Graphics::Feature;
-
 use strict;
-*end         = \&stop;
+
+use vars '$VERSION';
+$VERSION = 1.1;
+
+*stop        = \&end;
 *info        = \&name;
 *seqname     = \&name;
-*primary_tag = \&type;
+*type        = \&primary_tag;
 *exons       = *sub_SeqFeature = *merged_segments = \&segments;
 
 # usage:
-# Ace::Graphics::Feature->new(
+# Bio::Graphics::Feature->new(
 #                         -start => 1,
 #                         -end   => 100,
 #                         -name  => 'fred feature',
@@ -18,43 +21,64 @@ use strict;
 # to create a multisegmented feature.
 sub new {
   my $class= shift;
+  $class = ref($class) if ref $class;
   my %arg = @_;
 
   my $self = bless {},$class;
 
   $arg{-strand} ||= 0;
-  $self->{strand} = $arg{-strand} >= 0 ? +1 : -1;
-  $self->{name}   = $arg{-name};
-  $self->{type}   = $arg{-type}   || 'feature';
-  $self->{source} = $arg{-source} || $arg{-source_tag} || '';
-  $self->{score}  = $arg{-score}  || 0;
+  $self->{strand}  = $arg{-strand} >= 0 ? +1 : -1;
+  $self->{name}    = $arg{-name};
+  $self->{type}    = $arg{-type}   || 'feature';
+  $self->{subtype} = $arg{-subtype} if exists $arg{-subtype};
+  $self->{source}  = $arg{-source} || $arg{-source_tag} || '';
+  $self->{score}   = $arg{-score}  || 0;
+  $self->{start}   = $arg{-start};
+  $self->{stop}    = $arg{-end} || $arg{-stop};
+
+  # fix start, stop
+  if (defined $self->{stop} && defined $self->{start}
+      && $self->{stop} < $self->{start}) {
+    @{$self}{'start','stop'} = @{$self}{'stop','start'};
+    $self->{strand} *= -1;
+  }
 
   my @segments;
   if (my $s = $arg{-segments}) {
+    $self->add_segment(@$s);
+  }
+  $self;
+}
 
-    my $subtype =   $arg{-subtype} || $arg{-type};
+sub add_segment {
+  my $self        = shift;
+  my $type = $self->{subtype} || $self->{type};
+  $self->{segments} ||= [];
 
-    for my $seg (@$s) {
-      if (ref($seg) eq 'ARRAY') {
-	push @segments,$class->new(-start=>$seg->[0],
-				   -stop=>$seg->[1],
-				   -strand=>$self->{strand},
-				   -type  => $subtype);
-      } else {
-	push @segments,$seg;
+  my @segments = @{$self->{segments}};
+
+  for my $seg (@_) {
+    if (ref($seg) eq 'ARRAY') {
+      my ($start,$stop) = @{$seg};
+      my $strand = $self->{strand};
+
+      if ($start > $stop) {
+	($start,$stop) = ($stop,$start);
+	$strand *= -1;
       }
+      push @segments,$self->new(-start=>$start,
+				-stop=>$stop,
+				-strand=>$strand,
+				-type  => $type);
+    } else {
+      push @segments,$seg;
     }
   }
-
   if (@segments) {
     $self->{segments} = [ sort {$a->start <=> $b->start } @segments ];
     $self->{start} = $self->{segments}[0]->start;
-    ($self->{stop}) = sort { $b <=> $a } map { $_->stop} @segments;
-  } else {
-    $self->{start} = $arg{-start};
-    $self->{stop}   = $arg{-end} || $arg{-stop};
+    ($self->{stop}) = sort { $b <=> $a } map { $_->end} @segments;
   }
-  $self;
 }
 
 sub segments {
@@ -62,21 +86,26 @@ sub segments {
   my $s = $self->{segments} or return wantarray ? () : 0;
   @$s;
 }
-sub score    { shift->{score}       }
-sub type     { shift->{type}        }
+sub score    {
+  my $self = shift;
+  my $d = $self->{score};
+  $self->{score} = shift if @_;
+  $d;
+}
+sub primary_tag     { shift->{type}        }
 sub strand   { shift->{strand}      }
 sub name     { shift->{name}        }
 sub start    {
   my $self = shift;
   return $self->{start};
 }
-sub stop    {
+sub end    {
   my $self = shift;
   return $self->{stop};
 }
 sub length {
   my $self = shift;
-  return $self->stop - $self->start + 1;
+  return $self->end - $self->start + 1;
 }
 
 sub source_tag { shift->{source} }
@@ -94,30 +123,30 @@ __END__
 
 =head1 NAME
 
-Ace::Graphics::Feature - A simple feature object for use with Ace::Graphics::Panel
+Bio::Graphics::Feature - A simple feature object for use with Bio::Graphics::Panel
 
 =head1 SYNOPSIS
 
- use Ace::Graphics::Feature;
+ use Bio::Graphics::Feature;
 
  # create a simple feature with no internal structure
- $f = Ace::Graphics::Feature->new(-start => 1000,
+ $f = Bio::Graphics::Feature->new(-start => 1000,
                                   -stop  => 2000,
                                   -type  => 'transcript',
                                   -name  => 'alpha-1 antitrypsin'
                                  );
 
  # create a feature composed of multiple segments, all of type "similarity"
- $f = Ace::Graphics::Feature->new(-segments => [[1000,1100],[1500,1550],[1800,2000]],
+ $f = Bio::Graphics::Feature->new(-segments => [[1000,1100],[1500,1550],[1800,2000]],
                                   -name     => 'ABC-3',
                                   -type     => 'gapped_alignment',
                                   -subtype  => 'similarity');
 
  # build up a gene exon by exon
- $e1 = Ace::Graphics::Feature->new(-start=>1,-stop=>100,-type=>'exon');
- $e2 = Ace::Graphics::Feature->new(-start=>150,-stop=>200,-type=>'exon');
- $e3 = Ace::Graphics::Feature->new(-start=>300,-stop=>500,-type=>'exon');
- $f  = Ace::Graphics::Feature->new(-segments=>[$e1,$e2,$e3],-type=>'gene');
+ $e1 = Bio::Graphics::Feature->new(-start=>1,-stop=>100,-type=>'exon');
+ $e2 = Bio::Graphics::Feature->new(-start=>150,-stop=>200,-type=>'exon');
+ $e3 = Bio::Graphics::Feature->new(-start=>300,-stop=>500,-type=>'exon');
+ $f  = Bio::Graphics::Feature->new(-segments=>[$e1,$e2,$e3],-type=>'gene');
 
 =head1 DESCRIPTION
 
@@ -159,6 +188,12 @@ A number of new methods are provided for compatibility with
 Ace::Sequence, which has a slightly different API from SeqFeatureI:
 
 =over 4
+
+=item add_segment(@segments)
+
+Add one or more segments (a subfeature).  Segments can either be
+Feature objects, or [start,stop] arrays, as in the -segments argument
+to new().  The feature endpoints are automatically adjusted.
 
 =item segments()
 
