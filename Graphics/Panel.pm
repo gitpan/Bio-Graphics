@@ -7,7 +7,7 @@ use Carp 'cluck';
 use GD;
 use vars '$VERSION';
 
-$VERSION = '0.90';
+$VERSION = '0.91';
 
 use constant KEYLABELFONT => gdMediumBoldFont;
 use constant KEYSPACING   => 10; # extra space between key columns
@@ -332,6 +332,7 @@ sub boxes {
   my $pt = $self->pad_top;
   my $between = $self->{key_style} eq 'between';
   for my $track (@{$self->{tracks}}) {
+    next unless $track->parts;
     $offset += $self->{key_font}->height if $between && $track->option('key');
     my $boxes = $track->boxes(0,$offset+$pt);
     push @boxes,@$boxes;
@@ -385,7 +386,7 @@ sub format_key {
     # and their max size
     for my $track (@{$self->{tracks}}) {
       next unless $track->option('key');
-      my $glyph = $track->keyglyph;
+      my $glyph = $track->parts ? ($track->parts)[0]->keyglyph : $track->keyglyph;
       $tracks{$track} = $glyph;
       my ($h,$w) = ($glyph->layout_height,
 		    $glyph->layout_width);
@@ -462,10 +463,12 @@ sub draw_grid {
 # calculate major and minor ticks, given a start position
 sub ticks {
   my $self = shift;
-  my ($start,$end,$font) = @_;
+  my ($start,$end,$font,$divisor) = @_;
   $start   = $self->{offset}+1             unless defined $start;
   $end     = $start + $self->{length} - 1  unless defined $end;
   $font ||= gdSmallFont;
+  $divisor ||= 1;
+
   my (@major,@minor);
 
   # figure out tick mark scale
@@ -476,7 +479,7 @@ sub ticks {
 
   my $interval = 1;
   my $mindist =  30;
-  my $widest = 5 + (CORE::length($end) * $width);
+  my $widest = 5 + (CORE::length(int($end/$divisor)) * $width);
   $mindist = $widest if $widest > $mindist;
 
   while (1) {

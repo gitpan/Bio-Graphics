@@ -76,16 +76,19 @@ sub _description {
   return $label unless $label eq '1';
   return "1"   if $label eq '1 ';
 
-  return $self->get_description($self->feature);
+  return $self->{_description} if exists $self->{_description};
+  return $self->{_description} = $self->get_description($self->feature);
 }
 
 sub get_description {
   my $self = shift;
   my $feature = shift;
+  if (my @notes = eval { $feature->notes }) {
+    return join '; ',@notes;
+  }
   my $tag = $feature->source_tag;
   return undef if $tag eq '';
   $tag;
-
 }
 
 sub draw {
@@ -101,7 +104,8 @@ sub draw_label {
   my $label = $self->label or return;
   my $x = $self->left + $left;
   $x = $self->panel->left + 1 if $x <= $self->panel->left;
-  $gd->string($self->font,
+  my $font = $self->option('labelfont') || $self->font;
+  $gd->string($font,
 	      $x,
 	      $self->top + $top,
 	      $label,
@@ -155,7 +159,7 @@ sub arrow {
   my $gd   = shift;
   my ($x1,$x2,$y) = @_;
   my $fg     = $self->set_pen;
-  my $height = $self->height/2;
+  my $height = $self->height/3;
 
   $gd->line($x1,$y,$x2,$y,$fg);
   $self->arrowhead($gd,$x2,$y,$height,+1) if $x1 < $x2;

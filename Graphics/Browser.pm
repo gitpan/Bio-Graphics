@@ -1,9 +1,10 @@
 package Bio::Graphics::Browser;
-# $Id: Browser.pm,v 1.1 2001/11/16 17:51:43 lstein Exp $
+# $Id: Browser.pm,v 1.8 2001/11/26 23:14:06 lstein Exp $
 
 use strict;
 use File::Basename 'basename';
 use Carp 'carp';
+use GD 'gdMediumBoldFont';
 
 use constant DEFAULT_WIDTH => 800;
 use vars '$VERSION';
@@ -75,15 +76,37 @@ sub make_link {
   my $self     = shift;
   my $feature  = shift;
   my $label = $self->feature2label($feature) or return;
-  my $link  = $self->config->label2link($label) or return;
-  $link =~ s/\$(\w+)/
-     $1 eq 'name'   ? $feature->name
-   : $1 eq 'class'  ? $feature->class
-   : $1 eq 'method' ? $feature->method
-   : $1 eq 'source' ? $feature->source
-   : $1
-    /exg;
-  $link;
+  my $link  = $self->get_link($label) or return;
+  if (ref $link eq 'CODE') {
+    return $link->($feature);
+  }
+ 
+  else {
+    $link =~ s/\$(\w+)/
+      $1 eq 'name'   ? $feature->name
+      : $1 eq 'class'  ? $feature->class
+      : $1 eq 'method' ? $feature->method
+      : $1 eq 'source' ? $feature->source
+      : $1
+       /exg;
+    return $link;
+  }
+}
+
+sub get_link {
+  my $self = shift;
+  my $label = shift;
+
+  unless (exists $self->{_link}{$label}) {
+    my $link = $self->{_link}{$label} = $self->config->label2link($label);
+    if ($link =~ /^sub\s+\{/) { # a subroutine
+      my $coderef = eval $link;
+      warn $@ if $@;
+      $self->{_link}{$label} = $coderef;
+    }
+  }
+
+  return $self->{_link}{$label};
 }
 
 sub labels {
@@ -118,7 +141,6 @@ sub image_and_map {
 				       );
   $panel->add_track($segment   => 'arrow',
 		    -double => 1,
-		    -bump =>1,
 		    -tick=>2,
 		   );
 
@@ -136,6 +158,7 @@ sub image_and_map {
   my (%similarity,%feature_count);
 
   while (my $feature = $iterator->next_feature) {
+
     my $label = $self->feature2label($feature);
     my $track = $tracks{$label} or next;
 
@@ -179,6 +202,58 @@ sub image_and_map {
   return ($gd,$boxes);
 }
 
+# generate the overview, if requested, and return it as a GD
+sub overview {
+  my $self = shift;
+  my ($partial_segment) = @_;
+
+  my $segment = $partial_segment->factory->segment($partial_segment->ref);
+
+  my $conf  = $self->config;
+  my $width = $self->width;
+  my $panel = Bio::Graphics::Panel->new(-segment => $segment,
+					-width   => $width,
+					-bgcolor => $self->setting('overview bgcolor') || 'wheat',
+				       );
+  $panel->add_track($segment   => 'arrow',
+		    -double    => 1,
+		    -label     => sub {"Overview of ".$segment->ref},
+		    -labelfont => gdMediumBoldFont,
+		    -units     => $self->setting('overview units') || 'M',
+		    -tick      => 2,
+		   );
+  if (my $landmarks  = $self->setting('overview landmarks') || ($conf->label2type('overview'))[0]) {
+    my $max_bump   = $conf->setting(general=>'bump density') || 50;
+
+    my @types = split /\s+/,$landmarks;
+    my $track = $panel->add_track(-glyph  => 'generic',
+				  -height  => 3,
+				  -fgcolor => 'black',
+				  -bgcolor => 'black',
+				  $conf->style('overview'),
+				 );
+    my $iterator = $segment->features(-type=>\@types,-iterator=>1,-rare=>1);
+    my $count;
+    while (my $feature = $iterator->next_feature) {
+      $track->add_feature($feature);
+      $count++;
+    }
+    $track->configure(-bump  => $count <= $max_bump,
+		      -label => $count <= $max_bump
+		     );
+  }
+
+  my $gd = $panel->gd;
+  my $red = $gd->colorClosest(255,0,0);
+  my ($x1,$x2) = $panel->map_pt($partial_segment->start,$partial_segment->end);
+  my ($y1,$y2) = (0,$panel->height-1);
+  $x1 = $x2 if $x2-$x1 <= 1;
+  $x2 = $panel->right-1 if $x2 >= $panel->right;
+  $gd->rectangle($x1,$y1,$x2,$y2,$red);
+
+  return ($gd,$segment->length);
+}
+
 sub read_configuration {
   my $self = shift;
   my $conf_dir = shift;
@@ -217,7 +292,7 @@ use vars '@ISA';
 @ISA = 'Bio::Graphics::FeatureFile';
 
 sub labels {
-  shift->configured_types;
+  grep { $_ ne 'overview' } shift->configured_types;
 }
 
 sub label2type {
@@ -244,6 +319,7 @@ sub invert_types {
   my $config  = $self->{config} or return;
   my %inverted;
   for my $label (keys %{$config}) {
+    next if $label eq 'overview';   # special case
     my $feature = $config->{$label}{feature} or next;
     foreach (shellwords($feature)) {
       $inverted{$_} = $label;
@@ -298,7 +374,7 @@ sub image_and_map {
 
   my $panel = Bio::Graphics::Panel->new(-segment => $segment,
 					-width   => $width,
-					-keycolor => 'moccasin',
+					-keycolor => $self->setting('detailed bgcolor') || 'moccasin',
 					-grid => 1,
 				       );
   $panel->add_track($segment   => 'arrow',
@@ -355,7 +431,7 @@ sub sort_features {
 
   my (%similarity,%other);
   while (my $feature = $iterator->next_feature) {
-    warn "got feature $feature, start = ",$feature->start," stop = ",$feature->stop,"\n";
+    warn "got feature $feature, start = ",$feature->start," stop = ",$feature->end,"\n";
 
     my $label = $self->feature2label($feature);
 

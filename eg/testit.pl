@@ -78,8 +78,8 @@ my $panel = Bio::Graphics::Panel->new(
 				      -pad_left => 20,
 				      -pad_right=> 20,
 #				      -bgcolor => 'teal',
-				      -key_style => 'between',
-#				      -key_style => 'bottom',
+#				      -key_style => 'between',
+				      -key_style => 'bottom',
 				     );
 my @colors = $panel->color_names();
 
@@ -177,6 +177,11 @@ $panel->add_track(graded_segments => $partial_gene,
 		  -bgcolor =>'blue',
 		  -label   => 1,
 		  -key     => 'Scored thing');
+
+$panel->add_track(diamond => [$segment,$zk154_1,$zk154_2,$zk154_3,$xyz4,$zed_27],
+		  -bgcolor =>'blue',
+		  -label   => 1,
+		  -key     => 'pointy thing');
 
 #print $panel->png;
 
