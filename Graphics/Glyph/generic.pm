@@ -58,14 +58,13 @@ sub _label {
   my $label = $self->option('label');
   return unless defined $label;
   return $label unless $label eq '1';
-  return "1"    if $label eq '1 ';
+  return "1"    if $label eq '1 '; # 1 with a space
 
   # figure it out ourselves
   my $f = $self->feature;
   my $info = eval {$f->info};
   return $info if $info;
-  return $f->seqname if $f->can('seqname');
-  return $f->primary_tag;
+  return eval {$f->seqname} || eval{$f->primary_tag};
 }
 sub _description {
   my $self = shift;
@@ -158,6 +157,7 @@ sub arrow {
   my $self = shift;
   my $gd   = shift;
   my ($x1,$x2,$y) = @_;
+
   my $fg     = $self->set_pen;
   my $height = $self->height/3;
 
@@ -167,3 +167,80 @@ sub arrow {
 }
 
 1;
+
+=head1 NAME
+
+Bio::Graphics::Glyph::generic - The "generic" glyph
+
+=head1 SYNOPSIS
+
+  See L<Bio::Graphics::Panel> and L<Bio::Graphics::Glyph>.
+
+=head1 DESCRIPTION
+
+This is identical to the "box" glyph.  It is the default glyph used
+when not otherwise specified.
+
+=head2 OPTIONS
+
+The following options are standard among all Glyphs.  See
+L<Bio::Graphics::Glyph> for a full explanation.
+
+  Option      Description                      Default
+  ------      -----------                      -------
+
+  -fgcolor      Foreground color	       black
+
+  -outlinecolor	Synonym for -fgcolor
+
+  -bgcolor      Background color               turquoise
+
+  -fillcolor    Synonym for -bgcolor
+
+  -linewidth    Line width                     1
+
+  -height       Height of glyph		       10
+
+  -font         Glyph font		       gdSmallFont
+
+  -connector    Connector type                 0 (false)
+
+  -connector_color
+                Connector color                black
+
+  -label        Whether to draw a label	       0 (false)
+
+  -description  Whether to draw a description  0 (false)
+
+  -strand_arrow Whether to indicate            0 (false)
+                 strandedness
+
+=head1 BUGS
+
+Please report them.
+
+=head1 SEE ALSO
+
+L<Bio::Graphics::Panel>,
+L<Bio::Graphics::Track>,
+L<Bio::Graphics::Glyph::anchored_arrow>,
+L<Bio::Graphics::Glyph::arrow>,
+L<Bio::Graphics::Glyph::box>,
+L<Bio::Graphics::Glyph::primers>,
+L<Bio::Graphics::Glyph::segments>,
+L<Bio::Graphics::Glyph::graded_segments>,
+L<Bio::Graphics::Glyph::toomany>,
+L<Bio::Graphics::Glyph::transcript>,
+L<Bio::Graphics::Glyph::transcript2>,
+
+=head1 AUTHOR
+
+Allen Day <day@cshl.org>.
+
+Copyright (c) 2001 Cold Spring Harbor Laboratory
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.  See DISCLAIMER.txt for
+disclaimers of warranty.
+
+=cut

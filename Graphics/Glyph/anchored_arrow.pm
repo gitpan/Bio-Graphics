@@ -2,9 +2,10 @@ package Bio::Graphics::Glyph::anchored_arrow;
 # package to use for drawing an arrow
 
 use strict;
-use vars '@ISA';
+use vars '@ISA','$VERSION';
 use Bio::Graphics::Glyph::arrow;
 @ISA = 'Bio::Graphics::Glyph::arrow';
+$VERSION = 1.01;
 
 sub draw_label {
   my $self = shift;
@@ -47,7 +48,7 @@ sub arrowheads {
   my $gstart  = $x1;
   my $gend    = $x2;
   my $pstart  = $self->panel->left;
-  my $pend    = $self->panel->right;
+  my $pend    = $self->panel->right-1;
 
   if ($gstart < $pstart) {  # off left end
     $sw = 1;
@@ -85,11 +86,41 @@ continues.  For example:
 
 =head2 OPTIONS
 
+The following options are standard among all Glyphs.  See
+L<Bio::Graphics::Glyph> for a full explanation.
+
+  Option      Description                      Default
+  ------      -----------                      -------
+
+  -fgcolor      Foreground color	       black
+
+  -outlinecolor	Synonym for -fgcolor
+
+  -bgcolor      Background color               turquoise
+
+  -fillcolor    Synonym for -bgcolor
+
+  -linewidth    Line width                     1
+
+  -height       Height of glyph		       10
+
+  -font         Glyph font		       gdSmallFont
+
+  -connector    Connector type                 0 (false)
+
+  -connector_color
+                Connector color                black
+
+  -label        Whether to draw a label	       0 (false)
+
+  -description  Whether to draw a description  0 (false)
+
 In addition to the standard options, this glyph recognizes the following:
 
   Option         Description                Default
 
   -tick          draw a scale               0
+
   -rel_coords    use relative coordinates   false
                  for scale
 

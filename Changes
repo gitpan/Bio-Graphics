@@ -1,4 +1,12 @@
 Revision history for Perl extension Bio::Graphics.
+0.98 Fri Feb 22 14:02:11 EST 2002
+	-Fixed up the scale so that numbers don't (or shouldn't)
+	overlap.
+
+0.97 Mon Feb 18 22:04:57 EST 2002
+	-Added the "dna" glyph, which supports display of raw DNA and a GC
+	content histogram.
+
 0.96 Fri Jan 11 13:23:03 EST 2002
 	-Added support for displaying heterogeneous features, such as WABA similarities.
 
