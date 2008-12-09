@@ -5,15 +5,16 @@ use strict;
 
 use Bio::Graphics::Panel;
 use Bio::Graphics::Feature;
+use GD 'gdMediumBoldFont';
 
 my $ftr = 'Bio::Graphics::Feature';
 
-my $segment = $ftr->new(-start=>-100,-end=>1000,-name=>'ZK154',-type=>'clone');
+my $segment = $ftr->new(-start=>-100,-end=>1400,-name=>'ZK154',-type=>'clone');
 my $zk154_1 = $ftr->new(-start=>-50,-end=>800,-name=>'ZK154.1',-type=>'gene');
-my $zk154_2 = $ftr->new(-start=>380,-end=>500,-name=>'ZK154.2',-type=>'gene');
+my $zk154_2 = $ftr->new(-segments=>[[200,300],[380,800]],-name=>'ZK154.2',-type=>'gene');
 my $zk154_3 = $ftr->new(-start=>900,-end=>1200,-name=>'ZK154.3',-type=>'gene');
 
-my $zed_27 = $ftr->new(-segments=>[[400,500],[550,600],[800,950]],
+my $zed_27 = $ftr->new(-segments=>[[550,600],[800,950],[1200,1300]],
 		   -name=>'zed-27',
 		   -subtype=>'exon',-type=>'transcript');
 my $abc3 = $ftr->new(-segments=>[[100,200],[350,400],[500,550]],
@@ -65,26 +66,20 @@ foreach (@segments) {
 }
 
 my $panel = Bio::Graphics::Panel->new(
-#				      -grid => [50,100,150,200,250,300,310,320,330],
 				      -gridcolor => 'lightcyan',
 				      -grid => 1,
 				      -segment => $segment,
-#				      -offset => 300,
-#				      -length  => 1000,
 				      -spacing => 15,
 				      -width   => 600,
 				      -pad_top  => 20,
 				      -pad_bottom  => 20,
 				      -pad_left => 20,
 				      -pad_right=> 20,
-#				      -bgcolor => 'teal',
-#				      -key_style => 'between',
-				      -key_style => 'bottom',
+				      -key_style => 'between',
 				     );
 my @colors = $panel->color_names();
 
 my $t = $panel->add_track(
-			  #		  generic => [$abc3,$zed_27],
 			  transcript2 => [$abc3,$zed_27],
 			  -label => 1,
 			  -bump => 1,
@@ -94,105 +89,50 @@ my $t = $panel->add_track(
 $t->configure(-bump=>1);
 $panel->add_track($segment,
 		  -glyph => 'arrow',
-		  -label => 'base pairs',
+		  -label => sub {scalar localtime},
+		  -labelfont => gdMediumBoldFont,
 		  -double => 1,
 		  -bump => 0,
 		  -height => 10,
 		  -arrowstyle=>'regular',
 		  -linewidth=>1,
-#		  -tkcolor => $colors[rand @colors],
 		  -tick => 2,
 		 );
-$panel->unshift_track(generic => [$segment,$zk154_1,$zk154_2,$zk154_3,[$xyz4,$zed_27]],
-		      -label     => sub { my $feature = shift; $feature->sub_SeqFeature>0},
-		      -bgcolor   => sub { shift->primary_tag eq 'predicted' ? 'olive' : 'red'},
-		      -connector => sub { my $feature = shift;
-					  my $type = $feature->primary_tag;
-					  $type eq 'group'      ? 'dashed'
-					    : $type eq 'transcript' ? 'hat'
-					      : $type eq 'alignment'  ? 'solid'
-						: undef},
-		      -all_callbacks => 1,
-		      -connector_color => 'black',
-		      -height => 10,
-		      -bump => 1,
-		      -linewidth=>2,
-		      #		  -tkcolor => $colors[rand @colors],
-		      -key => 'Signs',
-		 );
 
-my $track = $panel->add_track('transcript2',
-			      -label   => sub { $_[-1]->level == 0 } ,
-			      -connector => sub { return shift->type eq 'group' ? 'dashed' : ''},
-			      -point  => 0,
-			      -orient => 'N',
-			      -height => 8,
-			      -base => 1,
-			      -relative_coords => 1,
-			      -tick  => 2,
-			      -all_callbacks => 1,
-			      -bgcolor => 'red',
-			      -key     => 'Dynamically Added');
-$track->add_feature($bigone,$zed_27,$abc3);
-$track->add_group($predicted_exon1,$predicted_exon2,$confirmed_exon3);
-
-$panel->add_track(
-		  [$abc3,$zed_27,$partial_gene],
-		  -bgcolor   => sub { shift->source_tag eq 'predicted' ? 'green' : 'blue'},
-		  -glyph   => 'transcript',
-#		  -glyph   => sub { my $feature = shift; 
-#				    return $feature->source_tag eq 'predicted'
-#				      ? 'ellipse' : 'transcript'},
-		  -label       => sub { shift->sub_SeqFeature > 0 },
-#		  -label       => 1,
-#		  -description => sub { shift->sub_SeqFeature > 0 },
-		  -description => sub {
-		    my $feature = shift;
-		    return 1   if $feature->primary_tag eq 'transcript';
-		    return '*' if $feature->source_tag eq 'predicted';
-		    return;
-		  },
-		  -font2color  => 'red',
-		  -bump => +1,
-#		  -tkcolor => $colors[rand @colors],
-		  -key => 'Portents',
-		 );
-$panel->add_track(segments => [$segment,$zk154_1,[$zk154_2,$xyz4]],
-		  -label     => 1,
+$panel->add_track(generic => [$segment,$abc3,$zk154_1,[$zk154_2,$xyz4]],
+		  -label     => sub { $_[-1]->level == 0 } ,
 		  -bgcolor   => sub { shift->primary_tag eq 'predicted' ? 'green' : 'blue'},
 		  -connector => sub { my $primary_tag = shift->primary_tag;
 				      $primary_tag eq 'transcript' ? 'hat'
 				    : $primary_tag eq 'alignment'  ? 'solid'
-				    : undef},
+				    : 'solid'},
 		  -connector_color => 'black',
 		  -height => 10,
 		  -bump => 1,
 #		  -tkcolor => $colors[rand @colors],
 		  -key => 'Signals',
 		 );
-$panel->add_track(generic => [],
-		  -key => 'Foobar');
 
-$panel->add_track(graded_segments => $partial_gene,
-		  -bgcolor =>'blue',
-		  -label   => 1,
-		  -key     => 'Scored thing');
-
-$panel->add_track(diamond => [$segment,$zk154_1,$zk154_2,$zk154_3,$xyz4,$zed_27],
-		  -bgcolor =>'blue',
-		  -label   => 1,
-		  -key     => 'pointy thing');
-
-#print $panel->png;
+my $track = $panel->add_track('transcript2'=>[$bigone],
+			      -label   => 1,
+			      -connector => 'solid',
+			      -point  => 0,
+			      -orient => 'N',
+			      -height => 8,
+			      -base => 1,
+			      -relative_coords => 1,
+			      -tick  => 2,
+			      -bgcolor => 'red',
+			      -key     => 'Dynamically Added');
+#$track->add_feature($bigone,$zed_27,$abc3);
+#$track->add_group($predicted_exon1,$predicted_exon2,$confirmed_exon3);
+$track->add_group($bigone,$zed_27,$zk154_2,$bigone);
 
 my $gd    = $panel->gd;
 my @boxes = $panel->boxes;
 my $red   = $panel->translate_color('red');
 for my $box (@boxes) {
   my ($feature,@points) = @$box;
-#  $gd->rectangle(@points,$red);
 }
-#$gd->filledRectangle(0,0,20,200,1);
-#$gd->filledRectangle(600-20,0,600,200,1);
 print $gd->png;
 
