@@ -1,6 +1,6 @@
 package Bio::Graphics::FeatureFile;
 
-# $Id: FeatureFile.pm,v 1.1 2008/12/08 23:15:57 lstein Exp $
+# $Id: FeatureFile.pm,v 1.5 2008/12/23 08:07:58 lstein Exp $
 # This package parses and renders a simple tab-delimited format for features.
 # It is simpler than GFF, but still has a lot of expressive power.
 # See __END__ for the file format
@@ -59,58 +59,179 @@ storing a collection of sequence features.  However, it also stores
 rendering information about the features, and does not currently
 follow the CollectionI interface.
 
-=head2 The File Format
+=head1 The File Format
 
 There are two types of entry in the file format: feature entries, and
 formatting entries.  They can occur in any order.  See the Appendix
 for a full example.
 
+=head2 Formatting Entries
+
+Formatting entries are in the form:
+
+ [Stanza Name]
+ option1 = value1
+ option2 = value2
+ option3 = value3
+
+ [Stanza Name 2]
+ option1 = value1
+ option2 = value2
+ ...
+
+There can be zero or more stanzas, each with a unique name. The names
+can contain any character except the [] characters. Each stanza
+consists of one or more option = value pairs, where the option and the
+value are separated by an "=" sign and optional whitespace. Values can
+be continued across multiple lines by indenting the continuation lines
+by one or more spaces, as in:
+
+ [Named Genes]
+ feature = gene
+ glyph   = transcript2
+ description = These are genes that have been named
+   by the international commission on gene naming
+   (The Hague).
+
+Typically configuration stanzas will consist of several Bio::Graphics
+formatting options. A -option=>$value pair passed to
+Bio::Graphics::Panel->add_track() becomes a "option=value" pair in the
+feature file.
+
+=head2 Feature Entries
+
 Feature entries can take several forms.  At their simplest, they look
 like this:
 
- Gene	B0511.1	516-11208
+ Gene	B0511.1	Chr1:516..11208
 
 This means that a feature of type "Gene" and name "B0511.1" occupies
-the range between bases 516 and 11208.  A range can be specified
-equally well using a hyphen, or two dots as in 516..11208.  Negative
-coordinates are allowed, such as -187..1000.
+the range between bases 516 and 11208 on a sequence entry named
+Chr1. Columns are separated using whitespace (tabs or spaces).
+Embedded whitespace can be escaped using quote marks or backslashes:
+
+ Gene "My Favorite Gene" Chr1:516..11208
+
+=head2 Specifying Positions and Ranges
+
+A feature position is specified using a sequence ID (a genbank
+accession number, a chromosome name, a contig, or any other meaningful
+reference system, followed by a colon and a position range. Ranges are
+two integers separated by double dots or the hyphen. Examples:
+"Chr1:516..11208", "ctgA:1-5000". Negative coordinates are allowed, as
+in "Chr1:-187..1000".
 
 A discontinuous range ("split location") uses commas to separate the
 ranges.  For example:
 
- Gene B0511.1  516-619,3185-3294,10946-11208
+ Gene B0511.1  Chr1:516..619,3185..3294,10946..11208
 
-Alternatively, the locations can be split by repeating the features
-type and name on multiple adjacent lines:
+In the case of a split location, the sequence id only has to appear in
+front of the first range.
 
- Gene	B0511.1	516-619
- Gene	B0511.1	3185-3294
- Gene	B0511.1	10946-11208
+Alternatively, a split location can be indicated by repeating the
+features type and name on multiple adjacent lines:
 
-A comment can be added to features by adding a fourth column.  These
-comments will be rendered as under-the-glyph descriptions by those
-glyphs that honor descriptions:
+ Gene	B0511.1	Chr1:516..619
+ Gene	B0511.1	Chr1:3185..3294
+ Gene	B0511.1	Chr1:10946..11208
 
- Gene  B0511.1  516-619,3185-3294,10946-11208 "Putative primase"
+If all the locations are on the same reference sequence, you can
+specify a default chromosome using a "reference=<seqid>":
 
-Columns are separated using whitespace, not (necessarily) tabs.
-Embedded whitespace can be escaped using quote marks or backslashes in
-the same way as in the shell:
+ reference=Chr1
+ Gene	B0511.1	516..619
+ Gene	B0511.1	3185..3294
+ Gene	B0511.1	10946..11208
 
- 'Putative Gene' my\ favorite\ gene 516-11208
+The default seqid is in effect until the next "reference" line
+appears.
 
-Features can be grouped so that they are rendered by the "group" glyph
-(so far this has only been used to relate 5' and 3' ESTs).  To start a
-group, create a two-column feature entry showing the group type and a
-name for the group.  Follow this with a list of feature entries with a
-blank type.  For example:
+=head2 Feature Tags
+
+Tags can be added to features by adding a fourth column consisting of
+"tag=value" pairs:
+
+ Gene  B0511.1  Chr1:516..619,3185..3294 Note="Putative primase"
+
+Tags and their values take any form you want, and multiple tags can be
+separated by semicolons. You can also repeat tags multiple times:
+
+ Gene  B0511.1  Chr1:516..619,3185..3294 GO_Term=GO:100;GO_Term=GO:2087
+
+Several tags have special meanings:
+
+ Tag     Meaning
+ ---     -------
+
+ Type    The primary tag for a subfeature.
+ Score   The score of a feature or subfeature.
+ Phase   The phase of a feature or subfeature.
+ URL     A URL to link to (via the Bio::Graphics library).
+ Note    A note to attach to the feature for display by the Bio::Graphics library.
+
+For example, in the common case of an mRNA, you can use the "Type" tag
+to distinguish the parts of the mRNA into UTR and CDS:
+
+ mRNA B0511.1 Chr1:1..100 Type=UTR
+ mRNA B0511.1 Chr1:101..200,300..400,500..800 Type=CDS
+ mRNA B0511.1 Chr1:801..1000 Type=UTR
+
+The top level feature's primary tag will be "mRNA", and its subparts
+will have types UTR and CDS as indicated. Additional tags that are
+placed in the first line of the feature will be applied to the top
+level. In this example, the note "Putative primase" will be applied to
+the mRNA at the top level of the feature:
+
+ mRNA B0511.1 Chr1:1..100 Type=UTR;Note="Putative primase"
+ mRNA B0511.1 Chr1:101..200,300..400,500..800 Type=CDS
+ mRNA B0511.1 Chr1:801..1000 Type=UTR
+
+=head2 Feature Groups
+
+Features can be grouped so that they are rendered by the "group"
+glyph.  To start a group, create a two-column feature entry showing
+the group type and a name for the group.  Follow this with a list of
+feature entries with a blank type.  For example:
 
  EST	yk53c10
  	yk53c10.3	15000-15500,15700-15800
  	yk53c10.5	18892-19154
 
 This example is declaring that the ESTs named yk53c10.3 and yk53c10.5
-belong to the same group named yk53c10.  
+belong to the same group named yk53c10.
+
+=head2 Comments and the #include Directive
+
+Lines that begin with the # sign are treated as comments and
+ignored. When a # sign appears within a line, everything to the right
+of the symbol is also ignored, unless it looks like an HTML fragment or
+an HTML color, e.g.:
+
+ # this is ignored
+ [Example]
+ glyph   = generic   # this comment is ignored
+ bgcolor = #FF0000
+ link    = http://www.google.com/search?q=$name#results
+
+Be careful, because the processing of # signs uses a regexp heuristic. To be safe, 
+always put a space after the # sign to make sure it is treated as a comment.
+
+The special comment "#include 'filename'" acts like the C preprocessor
+directive and will insert the comments of a named file into the
+position at which it occurs. Relative paths will be treated relative
+to the file in which the #include occurs. Nested #include directives
+are allowed:
+
+ #include "/usr/local/share/my_directives.txt"
+ #include 'my_directives.txt'
+ #include chromosome3_features.gff3
+
+You can enclose the file path in single or double quotes as shown
+above. If there are no spaces in the filename the quotes are optional.
+
+Include file processing is not very smart. Avoid creating circular
+#include references. You have been warned!
 
 =cut
 
@@ -121,6 +242,8 @@ use Carp 'cluck','carp','croak';
 use IO::File;
 use Text::ParseWords 'shellwords';
 use Bio::DB::SeqFeature::Store;
+use File::Basename 'dirname';
+use Cwd 'getcwd';
 
 # default colors for unconfigured features
 my @COLORS = qw(cyan blue red yellow green wheat turquoise orange);
@@ -239,25 +362,28 @@ sub new {
   $self->safe_world(1)                            if $args{-safe_world};
   $self->allow_whitespace(1)                      if $args{-allow_whitespace};
 
+  $self->init_parse();
+
   # call with
   #   -file
   #   -text
-  my $fh;
   if (my $file = $args{-file}) {
     no strict 'refs';
-    if (defined fileno($file)) {
-      $fh = $file;
+    if (defined fileno($file)) { # a filehandle
+	$self->_stat($file);
+	$self->parse_fh($file);
     } elsif ($file eq '-') {
-      $self->parse_argv();
+	$self->parse_argv();
     } else {
-      $fh = IO::File->new($file) or croak("Can't open $file: $!\n");
+	$self->_stat($file);
+	$self->parse_file($file);
     }
-    $self->parse_file($fh);
   } elsif (my $text = $args{-text}) {
-    $self->parse_text($text);
+      $self->parse_text($text);
   }
-  close($fh) or warn "Error closing file: $!" if $fh;
-  $self;
+
+  $self->finish_parse();
+  return $self;
 }
 
 # render our features onto a panel using configuration data
@@ -414,8 +540,8 @@ sub render {
 
 sub _stat {
   my $self = shift;
-  my $fh   = shift;
-  $self->{stat} = [stat($fh)];
+  my $file = shift;
+  $self->{stat} = [stat($file)];
 }
 
 sub _visible {
@@ -464,40 +590,42 @@ sub smart_features {
 
 sub parse_argv {
   my $self = shift;
-  $self->init_parse;
-
   local $/ = "\n";
   while (<>) {
     chomp;
     $self->parse_line($_);
   }
-  $self->finish_parse;
 }
 
 sub parse_file {
-  my $self = shift;
-  my $fh   = shift or return;
+    my $self = shift;
+    my $file = shift;
 
-  $self->_stat($fh);
-  $self->init_parse;
+    my $fh   = IO::File->new($file) or return;
 
-  local $/ = "\n";
-  while (<$fh>) {
-    chomp;
-    $self->parse_line($_) || last;
-  }
-  $self->finish_parse;
+    my $cwd  = getcwd();
+    chdir(dirname($file));
+    $self->parse_fh($fh);
+    chdir($cwd);
+}
+
+sub parse_fh {
+    my $self = shift;
+    my $fh   = shift;
+    local $/ = "\n";
+    while (<$fh>) {
+	chomp;
+	$self->parse_line($_) || last;
+    }
 }
 
 sub parse_text {
   my $self = shift;
   my $text = shift;
 
-  $self->init_parse;
   foreach (split m/\015?\012|\015\012?/,$text) {
     $self->parse_line($_);
   }
-  $self->finish_parse;
 }
 
 sub parse_line {
@@ -507,8 +635,13 @@ sub parse_line {
   $line =~ s/\015//g;  # get rid of carriage returns left over by MS-DOS/Windows systems
   $line =~ s/\s+$//;   # get rid of trailing whitespace
 
-  return 1 if $line =~ /^\s*\#[^\#]?$/;   # comment line
+  if (/^#include\s+(.+)/) {  # #include directive
+      my ($include_file) = shellwords($1);
+      $self->parse_file($include_file);
+      return 1;
+  }
 
+  return 1 if $line =~ /^\s*\#[^\#]?$/;   # comment line
 
   # Are we in a configuration section or a data section?
   # We start out in 'config' state, and are triggered to
@@ -560,7 +693,7 @@ sub parse_config_line {
     local $_ = shift;
 
     # strip right-column comments unless they look like colors or html fragments
-    s/\s*\#.*$// unless /\#[0-9a-f]{6}\s*$/i || /\w+\#\w+/;   
+    s/\s*\#.*$// unless /\#[0-9a-f]{6,8}\s*$/i || /\w+\#\w+/;   
 
     if (/^\s+(.+)/ && $self->{current_tag}) { # configuration continuation line
 	my $value = $1;
@@ -1727,6 +1860,10 @@ __END__
  reference = Contig41
  height = 12
 
+ [mRNA]
+ glyph = gene
+ key   = Spliced genes
+
  [Cosmid]
  glyph = segments
  fgcolor = blue
@@ -1743,31 +1880,34 @@ __END__
  bgcolor = green
  description = 1
 
- Cosmid	B0511	516-619
- Cosmid	B0511	3185-3294
- Cosmid	B0511	10946-11208
- Cosmid	B0511	13126-13511
- Cosmid	B0511	11394-11539
- EST	yk260e10.5	15569-15724
- EST	yk672a12.5	537-618,3187-3294
- EST	yk595e6.5	552-618
- EST	yk595e6.5	3187-3294
- EST	yk846e07.3	11015-11208
+ mRNA B0511.1 Chr1:1..100 Type=UTR;Note="putative primase"
+ mRNA B0511.1 Chr1:101..200,300..400,500..800 Type=CDS
+ mRNA B0511.1 Chr1:801..1000 Type=UTR
+
+ reference = Chr3
+ Cosmid	B0511	516..619
+ Cosmid	B0511	3185..3294
+ Cosmid	B0511	10946..11208
+ Cosmid	B0511	13126..13511
+ Cosmid	B0511	11394..11539
+ EST	yk260e10.5	15569..15724
+ EST	yk672a12.5	537..618,3187..3294
+ EST	yk595e6.5	552..618
+ EST	yk595e6.5	3187..3294
+ EST	yk846e07.3	11015..11208
  EST	yk53c10
- 	yk53c10.3	15000-15500,15700-15800
- 	yk53c10.5	18892-19154
- EST	yk53c10.5	16032-16105
- SwissProt	PECANEX	13153-13656	Swedish fish
- FGENESH	Predicted gene 1	1-205,518-616,661-735,3187-3365,3436-3846	Pfam domain
- FGENESH	Predicted gene 2	5513-6497,7968-8136,8278-8383,8651-8839,9462-9515,10032-10705,10949-11340,11387-11524,11765-12067,12876-13577,13882-14121,14169-14535,15006-15209,15259-15462,15513-15753,15853-16219	Mysterious
- FGENESH	Predicted gene 3	16626-17396,17451-17597
- FGENESH	Predicted gene 4	18459-18722,18882-19176,19221-19513,19572-19835	Transmembrane protein
+ 	yk53c10.3	15000..15500,15700..15800
+ 	yk53c10.5	18892..19154
+ EST	yk53c10.5	16032..16105
+ SwissProt	PECANEX	13153-13656	Note="Swedish fish"
+ FGENESH	"Predicted gene 1"	1-205,518-616,661-735,3187-3365,3436-3846	"Pfam domain"
  # file ends
 
 =head1 SEE ALSO
 
 L<Bio::Graphics::Panel>,
 L<Bio::Graphics::Glyph>,
+L<Bio::DB::SeqFeature::Store::FeatureFileLoader>,
 L<Bio::Graphics::Feature>,
 L<Bio::Graphics::FeatureFile>
 
