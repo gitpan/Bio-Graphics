@@ -1,6 +1,6 @@
 package Bio::Graphics::FeatureFile;
 
-# $Id: FeatureFile.pm,v 1.6 2009/01/27 13:50:22 lstein Exp $
+# $Id: FeatureFile.pm,v 1.9 2009/03/05 23:03:37 lstein Exp $
 # This package parses and renders a simple tab-delimited format for features.
 # It is simpler than GFF, but still has a lot of expressive power.
 # See __END__ for the file format
@@ -201,7 +201,7 @@ feature entries with a blank type.  For example:
 This example is declaring that the ESTs named yk53c10.3 and yk53c10.5
 belong to the same group named yk53c10.
 
-=head2 Comments and the #include Directive
+=head2 Comments
 
 Lines that begin with the # sign are treated as comments and
 ignored. When a # sign appears within a line, everything to the right
@@ -217,23 +217,36 @@ an HTML color, e.g.:
 Be careful, because the processing of # signs uses a regexp heuristic. To be safe, 
 always put a space after the # sign to make sure it is treated as a comment.
 
+=head2 The #include and #exec Directives
+
 The special comment "#include 'filename'" acts like the C preprocessor
 directive and will insert the comments of a named file into the
 position at which it occurs. Relative paths will be treated relative
 to the file in which the #include occurs. Nested #include directives
-are allowed:
+(a #include located in a file that is itself an include file) are
+#allowed. You may also use one of the shell wildcard characters * and
+#? to include all matching files in a directory.
+
+The following are examples of valid #include directives:
 
  #include "/usr/local/share/my_directives.txt"
  #include 'my_directives.txt'
  #include chromosome3_features.gff3
-
+ #include gff.d/*.conf
+ 
 You can enclose the file path in single or double quotes as shown
 above. If there are no spaces in the filename the quotes are optional.
 The #include directive is case insensitive, allowing you to use
 #INCLUDE or #Include if you prefer.
 
-Include file processing is not very smart. Avoid creating circular
-#include references. You have been warned!
+Include file processing is not very smart and will not catch all
+circular #include references. You have been warned!
+
+The special comment "#exec 'command'" will spawn a shell and
+incorporate the output of the command into the configuration
+file. This command will be executed quite frequently, so it is
+suggested that any time-consuming processing that does not need to be
+performed on the fly each time should be cached in a local file.
 
 =cut
 
@@ -603,12 +616,13 @@ sub parse_file {
     my $self = shift;
     my $file = shift;
 
-    my $fh   = IO::File->new($file) or return;
-
-    my $cwd  = getcwd();
-    chdir(dirname($file));
-    $self->parse_fh($fh);
-    chdir($cwd);
+    for my $f (glob($file)) {
+	my $fh   = IO::File->new($f) or return;
+	my $cwd  = getcwd();
+	chdir(dirname($f));
+	$self->parse_fh($fh);
+	chdir($cwd);
+    }
 }
 
 sub parse_fh {
@@ -639,7 +653,17 @@ sub parse_line {
 
   if (/^#include\s+(.+)/i) {  # #include directive
       my ($include_file) = shellwords($1);
+      # detect some loops
+      croak "#include loop detected at $include_file"
+	  if $self->{includes}{$include_file}++;
       $self->parse_file($include_file);
+      return 1;
+  }
+
+  if (/^#exec\s+(.+)/i) {  # #exec directive
+      my ($command,@args) = shellwords($1);
+      open (my $fh,'-|') || exec $command,@args;
+      $self->parse_fh($fh);
       return 1;
   }
 
@@ -1731,6 +1755,7 @@ sub link_pattern {
       : $1 eq 'stop'         ? $feature->end   || ''
       : $1 eq 'segstart'     ? $panel->start   || ''
       : $1 eq 'segend'       ? $panel->end     || ''
+      : $1 eq 'length'       ? $feature->length || 0
       : $1 eq 'description'  ? eval {join '',$feature->notes} || ''
       : $1 eq 'id'           ? $feature->feature_id || ''
       : '$'.$1
