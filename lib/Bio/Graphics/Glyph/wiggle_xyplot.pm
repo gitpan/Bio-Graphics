@@ -100,7 +100,9 @@ sub draw_plot {
     my $y = $top + $self->pad_top;
     
     my $x_scale = $self->scale;
-    my $f_start = $self->feature->start;
+    my $panel_start = $self->panel->start;
+    my $feature     = $self->feature;
+    my $f_start = $feature->start > $panel_start ? $feature->start : $panel_start;
 
     # position of "0" on the scale
     my $y_origin = $min_score <= 0 ? $bottom - (0 - $min_score) * $y_scale : $bottom;
@@ -116,8 +118,9 @@ sub draw_plot {
 
     my @points = map {
 	my ($start,$end,$score) = @$_;
-	my $x1     = $left    + ($start - $f_start)   * $x_scale;
-	my $x2     = $left    + ($end   - $f_start)   * $x_scale;
+	my $x1     = $left    + ($start - $f_start) * $x_scale;
+	my $x2     = $left    + ($end   - $f_start) * $x_scale;
+#	warn "($start,$end,$score, x1=$x1, x2=$x2";
 	if ($x2 >= $left and $x1 <= $right) {
 	    my $y1     = $bottom  - ($score - $min_score) * $y_scale;
 	    my $y2     = $y_origin;
@@ -177,20 +180,28 @@ sub draw_plot {
 sub minmax {
     my $self   = shift;
     my $parts  = shift;
-    
+
+    my $autoscale  = $self->option('autoscale') || '';
     my $min_score  = $self->option('min_score');
     my $max_score  = $self->option('max_score');
 
-    my $do_min = !defined $min_score;
-    my $do_max = !defined $max_score;
+    my $do_min     = !defined $min_score;
+    my $do_max     = !defined $max_score;
 
-    if ($do_min or $do_max) {
+    if ($autoscale eq 'global') {
+	if (my $wig = $self->wig) {	
+	    $min_score = $wig->min if $do_min;
+	    $max_score = $wig->max if $do_max;
+	}
+    }
+
+    if (($do_min or $do_max) and ($autoscale ne 'global')) {
 	my $first = $parts->[0];
 	for my $part (@$parts) {
 	    my $s = $part->[2];
 	    next unless defined $s;
-	    $max_score = $s if $do_max && (!defined $max_score or $s > $max_score);
 	    $min_score = $s if $do_min && (!defined $min_score or $s < $min_score);
+	    $max_score = $s if $do_max && (!defined $max_score or $s > $max_score);
 	}
     }
 
@@ -252,25 +263,11 @@ sub create_parts_for_dense_feature {
 	my $offset = $i * $points_per_span;
 	my $value  = shift @$data;
 	next unless defined $value;
-	push @parts,[int($i * $points_per_span),
-		     int($i * $points_per_span),
+	push @parts,[$start + int($i * $points_per_span),
+		     $start + int($i * $points_per_span),
 		     $value];
     }
     return \@parts;
-}
-
-sub minmax {
-  my $self  = shift;
-  my $parts = shift;
-  if (my $wig = $self->wig) {
-    my $max = $self->option('max_score');
-    my $min = $self->option('min_score');
-    $max = $wig->max unless defined $max;
-    $min = $wig->min unless defined $min;
-    return ($min,$max);
-  } else {
-    return $self->SUPER::minmax($parts);
-  }
 }
 
 sub subsample {
@@ -368,6 +365,16 @@ recognized:
                                 tags giving relative paths. Default is to use the
                                 current working directory. Absolute wigfile &
                                 densefile paths will not be changed.
+
+   autoscale   "local" or "global"
+                             If one or more of min_score and max_score options 
+                             are absent, then these values will be calculated 
+                             automatically. The "autoscale" option controls how
+                             the calculation is done. The "local" value will
+                             scale values according to the minimum and maximum
+                             values present in the window being graphed. "global"   
+                             will use chromosome-wide statistics for the entire
+                             wiggle or dense file to find min and max values.
 
    smoothing   method name  Smoothing method: one of "mean", "max", "min" or "none"
 
