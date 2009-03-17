@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 1.90
+version: 1.91
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 1.90
+    version: 1.91
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -180,6 +180,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/wiggle_box.pm
   Bio::Graphics::Glyph::wiggle_density:
     file: lib/Bio/Graphics/Glyph/wiggle_density.pm
+  Bio::Graphics::Glyph::wiggle_minmax:
+    file: lib/Bio/Graphics/Glyph/wiggle_minmax.pm
   Bio::Graphics::Glyph::wiggle_xyplot:
     file: lib/Bio/Graphics/Glyph/wiggle_xyplot.pm
   Bio::Graphics::Glyph::xyplot:
