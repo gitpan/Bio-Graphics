@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 1.94
+version: 1.95
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 1.94
+    version: 1.95
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -198,7 +198,7 @@ provides:
     file: lib/Bio/Graphics/Wiggle.pm
   Bio::Graphics::Wiggle::Loader:
     file: lib/Bio/Graphics/Wiggle/Loader.pm
-generated_by: Module::Build version 0.280801
+generated_by: Module::Build version 0.3
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
   version: 1.2
