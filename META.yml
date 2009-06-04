@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 1.95
+version: 1.96
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 1.95
+    version: 1.96
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -27,10 +27,14 @@ provides:
     file: lib/Bio/Graphics/Feature.pm
   Bio::Graphics::FeatureBase:
     file: lib/Bio/Graphics/FeatureBase.pm
+  Bio::Graphics::FeatureDir:
+    file: lib/Bio/Graphics/FeatureDir.pm
   Bio::Graphics::FeatureFile:
     file: lib/Bio/Graphics/FeatureFile.pm
   Bio::Graphics::FeatureFile::Iterator:
     file: lib/Bio/Graphics/FeatureFile/Iterator.pm
+  Bio::Graphics::FileSplitter:
+    file: lib/Bio/Graphics/FeatureDir.pm
   Bio::Graphics::Glyph:
     file: lib/Bio/Graphics/Glyph.pm
   Bio::Graphics::Glyph::Factory:
@@ -79,12 +83,16 @@ provides:
     file: lib/Bio/Graphics/Glyph/graded_segments.pm
   Bio::Graphics::Glyph::group:
     file: lib/Bio/Graphics/Glyph/group.pm
+  Bio::Graphics::Glyph::hat:
+    file: lib/Bio/Graphics/Glyph/hat.pm
   Bio::Graphics::Glyph::heat_map:
     file: lib/Bio/Graphics/Glyph/heat_map.pm
   Bio::Graphics::Glyph::heat_map_ideogram:
     file: lib/Bio/Graphics/Glyph/heat_map_ideogram.pm
   Bio::Graphics::Glyph::heterogeneous_segments:
     file: lib/Bio/Graphics/Glyph/heterogeneous_segments.pm
+  Bio::Graphics::Glyph::hidden:
+    file: lib/Bio/Graphics/Glyph/hidden.pm
   Bio::Graphics::Glyph::hybrid_plot:
     file: lib/Bio/Graphics/Glyph/hybrid_plot.pm
   Bio::Graphics::Glyph::ideogram:
@@ -103,6 +111,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/minmax.pm
   Bio::Graphics::Glyph::oval:
     file: lib/Bio/Graphics/Glyph/oval.pm
+  Bio::Graphics::Glyph::pairplot:
+    file: lib/Bio/Graphics/Glyph/pairplot.pm
   Bio::Graphics::Glyph::pentagram:
     file: lib/Bio/Graphics/Glyph/pentagram.pm
   Bio::Graphics::Glyph::phylo_align:
@@ -117,6 +127,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/protein.pm
   Bio::Graphics::Glyph::ragged_ends:
     file: lib/Bio/Graphics/Glyph/ragged_ends.pm
+  Bio::Graphics::Glyph::rainbow_gene:
+    file: lib/Bio/Graphics/Glyph/rainbow_gene.pm
   Bio::Graphics::Glyph::redgreen_box:
     file: lib/Bio/Graphics/Glyph/redgreen_box.pm
   Bio::Graphics::Glyph::redgreen_segment:
