@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 1.99
+version: 1.991
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 1.99
+    version: 1.991
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -95,6 +95,7 @@ provides:
     file: lib/Bio/Graphics/Glyph/hidden.pm
   Bio::Graphics::Glyph::hybrid_plot:
     file: lib/Bio/Graphics/Glyph/hybrid_plot.pm
+    version: 1.0
   Bio::Graphics::Glyph::ideogram:
     file: lib/Bio/Graphics/Glyph/ideogram.pm
   Bio::Graphics::Glyph::image:
