@@ -1,5 +1,5 @@
 package Bio::Graphics::Glyph::line;
-# $Id: line.pm,v 1.3 2009/06/04 21:51:08 lstein Exp $
+# $Id: line.pm,v 1.3 2009-06-04 21:51:08 lstein Exp $
 
 use strict;
 use base qw(Bio::Graphics::Glyph::generic);

@@ -1,6 +1,6 @@
 package Bio::Graphics::Glyph::processed_transcript;
 
-# $Id: processed_transcript.pm,v 1.1 2008/12/08 23:18:43 lstein Exp $
+# $Id: processed_transcript.pm,v 1.1 2008-12-08 23:18:43 lstein Exp $
 
 use strict;
 use base qw(Bio::Graphics::Glyph::transcript2);

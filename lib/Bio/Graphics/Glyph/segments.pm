@@ -1,5 +1,5 @@
 package Bio::Graphics::Glyph::segments;
-#$Id: segments.pm,v 1.4 2009/06/23 10:54:16 lstein Exp $
+#$Id: segments.pm,v 1.4 2009-06-23 10:54:16 lstein Exp $
 
 use strict;
 use Bio::Location::Simple;
@@ -15,6 +15,8 @@ use constant SRC_START => 1;
 use constant SRC_END   => 2;
 use constant TGT_START => 3;
 use constant TGT_END   => 4;
+
+eval { require Bio::Graphics::Browser2::Realign; 1; } || eval { require Bio::Graphics::Browser::Realign; };
 
 use base qw(Bio::Graphics::Glyph::segmented_keyglyph Bio::Graphics::Glyph::generic);
 
@@ -241,7 +243,12 @@ sub draw_multiple_alignment {
     @s = ($feature);
   }
 
-  my $can_realign = $do_realign && eval { require Bio::Graphics::Browser::Realign; 1 };
+  my $can_realign;
+  if (Bio::Graphics::Browser2::Realign->can('align_segs')) {
+      $can_realign   = \&Bio::Graphics::Browser2::Realign::align_segs;
+  } elsif (Bio::Graphics::Browser::Realign->can('align_segs')) {
+      $can_realign   = \&Bio::Graphics::Browser::Realign::align_segs;
+  }
 
   my (@segments,%strands);
   for my $s (@s) {
@@ -262,21 +269,30 @@ sub draw_multiple_alignment {
       $strands{$target} = $strand;
     }
 
-    # realign for internal gaps, if requested
     if ($can_realign) {
-      warn   "Realigning [$target,$src_start,$src_end,$tgt_start,$tgt_end].\n" if DEBUG;
-      my ($sdna,$tdna) = ($s->dna,$target->dna);
-      my @result = $self->realign($sdna,$tdna);
-      foreach (@result) {
-	warn "=========> [$target,@$_]\n" if DEBUG;
-	my $a = $strands{$target} >= 0 ? [$target,$_->[0]+$src_start,$_->[1]+$src_start,$_->[2]+$tgt_start,$_->[3]+$tgt_start]
-	                               : [$target,$src_end-$_->[1],$src_end-$_->[0],$_->[2]+$tgt_start,$_->[3]+$tgt_start];
-	warn "[$target,$_->[0]+$src_start,$_->[1]+$src_start,$tgt_end-$_->[3],$tgt_end-$_->[2]]" if DEBUG;
-	warn "=========> [@$a]\n" if DEBUG;
-	warn substr($sdna,     $_->[0],$_->[1]-$_->[0]+1),"\n" if DEBUG;
-	warn substr($tdna,$_->[2],$_->[3]-$_->[2]+1),"\n"      if DEBUG;
-	push @segments,$a;
-      }
+	my ($sdna,$tdna) = ($s->dna,$target->dna);	
+	my @exact_segments;
+
+	if (my $cigar = eval {$s->cigar_array}) {
+	    warn   "Segmenting [$target,$src_start,$src_end,$tgt_start,$tgt_end] via $cigar.\n" if DEBUG;
+	    @exact_segments = $self->_gapped_alignment_to_segments($cigar,$sdna,$tdna);
+	}
+	elsif ($do_realign) {
+	    warn   "Realigning [$target,$src_start,$src_end,$tgt_start,$tgt_end].\n" if DEBUG;
+	    @exact_segments = $can_realign->($sdna,$tdna);	    
+	}
+
+	foreach (@exact_segments) {
+	    warn "=========> [$target,@$_]\n" if DEBUG;
+	    my $a = $strands{$target} >= 0
+		? [$target,$_->[0]+$src_start,$_->[1]+$src_start,$_->[2]+$tgt_start,$_->[3]+$tgt_start]
+		: [$target,$src_end-$_->[1],$src_end-$_->[0],$_->[2]+$tgt_start,$_->[3]+$tgt_start];
+	    warn "[$target,$_->[0]+$src_start,$_->[1]+$src_start,$tgt_end-$_->[3],$tgt_end-$_->[2]]" if DEBUG;
+	    warn "=========> [@$a]\n" if DEBUG;
+	    warn substr($sdna,     $_->[0],$_->[1]-$_->[0]+1),"\n" if DEBUG;
+	    warn substr($tdna,$_->[2],$_->[3]-$_->[2]+1),"\n"      if DEBUG;
+	    push @segments,$a;
+	}
     }
     else {
       push @segments,[$target,$src_start,$src_end,$tgt_start,$tgt_end];
@@ -286,7 +302,7 @@ sub draw_multiple_alignment {
   # get 'em in the right order so that we don't have to worry about
   # where the beginning and end are.
   @segments = sort {$a->[TGT_START]<=>$b->[TGT_START]} @segments;
-
+    
   # adjust for ragged (nonaligned) ends
   my ($offset_left,$offset_right) = (0,0);
   if ($ragged_extra && $ragged_extra > 0) {
@@ -309,7 +325,7 @@ sub draw_multiple_alignment {
     # add a little rag to the right end - this is complicated because
     # we don't know what the length of the underlying dna is, so we
     # use the subfeat method to find out
-    my $current_end     = $segments[-1]->[TGT_END];
+    my $current_end        = $segments[-1]->[TGT_END];
     $offset_right          = length $segments[-1]->[TARGET]->subseq($current_end+1,$current_end+$ragged_extra)->seq;
     if ($strand >= 0) {
       $abs_end                 += $offset_right;
@@ -327,7 +343,16 @@ sub draw_multiple_alignment {
   # get the DNAs now - a little complicated by the necessity of using
   # the subseq() method
   my $ref_dna = $feature->subseq(1-$offset_left,$feature->length+$offset_right)->seq;
-  my $tgt_dna = $feature->hit->subseq(1-$offset_left,$feature->length+$offset_right)->seq;
+
+  # old version
+  # my $tgt_dna = $feature->hit->subseq(1-$offset_left,$feature->length+$offset_right)->seq;
+
+  # dirty hack
+  # my $tgt_dna   = $feature->hit->dna;
+
+  # this MIGHT be right
+  my $tgt_len = abs($segments[-1]->[TGT_END] - $segments[0]->[TGT_START]) + 1;
+  my $tgt_dna = $feature->hit->subseq(1-$offset_left,$tgt_len+$offset_right)->seq;
 
   # work around changes in the API
   $ref_dna    = $ref_dna->seq if ref $ref_dna and $ref_dna->can('seq');
@@ -429,7 +454,6 @@ sub draw_multiple_alignment {
 
       my $src_base = $self->_subsequence($ref_dna,$seg->[SRC_START]+$i,$seg->[SRC_START]+$i);
       my $tgt_base = $self->_subsequence($tgt_dna,$seg->[TGT_START]+$i,$seg->[TGT_START]+$i);
-#      warn $seg->[TGT_START]+$i,' ',$seg->[TGT_START]+$i if DEBUG;
       my $x = $base2pixel->($seg->[SRC_START],$i);
       $leftmost = $x if !defined $leftmost  || $leftmost  > $x;
       $rightmost= $x if !defined $rightmost || $rightmost < $x;
@@ -437,7 +461,7 @@ sub draw_multiple_alignment {
       next unless $tgt_base && $x >= $panel_left && $x <= $panel_right;
 
       $self->filled_box($gd,
-			$x-$pixels_per_base/2+3,
+			$i == 0 ? $x-3 : $x-$pixels_per_base/2+3,
 			$y+1,
 			$x+$pixels_per_base/2+3,
 			$y+$lineheight,
@@ -481,9 +505,15 @@ sub draw_multiple_alignment {
 	    next if $x < $panel_left;
  	    $gd->char($font,$x,$y,$bp,$color);
  	  }
+	} else {  #here's where we insert the insertion length
+	    my $length = $delta-1;
+	    if ($gap_distance >= $fontwidth*length($length)) {
+		my $center = $gap_left + $gap_distance/2 - ($fontwidth*length($length))/2;
+		$gd->char($font,$center,$y,$length,$color);
+	    }
 	}
 	# stick in a blob
-	$self->_draw_insertion_point($gd,$gap_left,$gap_right,$y,$y+$lineheight,$mismatch) if $delta > 2;
+	# $self->_draw_insertion_point($gd,$gap_left,$gap_right,$y,$y+$lineheight,$mismatch) if $delta > 2;
       }
       # deal with gaps in the alignment
       elsif ( (my $delta = $seg->[SRC_START] - $src_last_end) > 1) {
@@ -516,6 +546,61 @@ sub draw_multiple_alignment {
   return $drew_sequence;
 }
 
+sub _gapped_alignment_to_segments {
+    my $self = shift;
+    my ($cigar,$sdna,$tdna) = @_;
+    my ($pad_source,$pad_target,$pad_match);
+
+    for my $event (@$cigar) {
+	my ($op,$count) = @$event;
+	if ($op eq 'I' || $op eq 'S' || $op eq 'H') {
+	    $pad_source .= '-' x $count;
+	    $pad_target .= substr($tdna,0,$count,'');
+	    $pad_match  .= ' ' x $count;
+	}
+	elsif ($op eq 'D' || $op eq 'N' || $op eq 'P') {
+	    $pad_source .= substr($tdna,0,$count,'');
+	    $pad_target .= '-' x $count;
+	    $pad_match  .= ' ' x $count;
+	} else {  # everything else is assumed to be a match -- revisit
+	    $pad_source .= substr($sdna,0,$count,'');
+	    $pad_target .= substr($tdna,0,$count,'');
+	    $pad_match  .= '|' x $count;
+	}
+    }
+
+    return $self->pads_to_segments($pad_source,$pad_match,$pad_target);
+}
+
+sub pads_to_segments {
+    my $self = shift;
+    my ($gap1,$align,$gap2) = @_;
+
+    # create arrays that map residue positions to gap positions
+    my @maps;
+    for my $seq ($gap1,$gap2) {
+	my @seq = split '',$seq;
+	my @map;
+	my $residue = 0;
+	for (my $i=0;$i<@seq;$i++) {
+	    $map[$i] = $residue;
+	    $residue++ if $seq[$i] ne '-';
+	}
+	push @maps,\@map;
+    }
+
+    my @result;
+    while ($align =~ /(\S+)/g) {
+	my $align_end   = pos($align) - 1;
+	my $align_start = $align_end  - length($1) + 1;
+	push @result,[@{$maps[0]}[$align_start,$align_end],
+		      @{$maps[1]}[$align_start,$align_end]];
+    }
+    return wantarray ? @result : \@result;
+}
+
+
+
 sub _subsequence {
   my $self = shift;
   my ($seq,$start,$end,$strand) = @_;
@@ -527,12 +612,6 @@ sub _subsequence {
     $sub = substr($seq,$start-1,$end-$start+1);
   }
   return $self->flip ? $complement{$sub} : $sub;
-}
-
-sub realign {
-  my $self = shift;
-  my ($src,$tgt) = @_;
-  return Bio::Graphics::Browser::Realign::align_segs($src,$tgt);
 }
 
 # Override _subfeat() method to make it appear that a top-level feature that

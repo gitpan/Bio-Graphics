@@ -1,5 +1,5 @@
 package Bio::Graphics::Glyph::hat;
-# $Id: hat.pm,v 1.2 2009/06/04 21:51:08 lstein Exp $
+# $Id: hat.pm,v 1.2 2009-06-04 21:51:08 lstein Exp $
 # a simple inverted V (used by DAS)
 
 use strict;

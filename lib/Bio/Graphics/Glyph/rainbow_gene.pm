@@ -1,6 +1,6 @@
 package Bio::Graphics::Glyph::rainbow_gene;
 
-# $Id: rainbow_gene.pm,v 1.1 2009/05/20 19:00:04 pruzanov Exp $
+# $Id: rainbow_gene.pm,v 1.1 2009-05-20 19:00:04 pruzanov Exp $
 
 use strict;
 use base qw(Bio::Graphics::Glyph::gene Bio::Graphics::Glyph::heat_map);
