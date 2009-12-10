@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 1.993
+version: 1.994
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 1.993
+    version: 1.994
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -41,6 +41,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/Factory.pm
   Bio::Graphics::Glyph::alignment:
     file: lib/Bio/Graphics/Glyph/alignment.pm
+  Bio::Graphics::Glyph::allele_tower:
+    file: lib/Bio/Graphics/Glyph/allele_tower.pm
   Bio::Graphics::Glyph::anchored_arrow:
     file: lib/Bio/Graphics/Glyph/anchored_arrow.pm
   Bio::Graphics::Glyph::arrow:
