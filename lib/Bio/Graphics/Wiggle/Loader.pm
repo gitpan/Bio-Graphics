@@ -52,6 +52,13 @@ feature. In the case of "featurefile", the returned file will contain
 GBrowse stanzas that describe a reasonable starting format to display
 the data.
 
+=item $loader->allow_sampling(1)
+
+If allow_sampling() is passed a true value, then very large files
+(more than 5 MB) will undergo a sampling procedure to find their
+minimum and maximum values and standard deviation. Otherwise, file
+will be read in its entirety to generate those statistics.
+
 =back
 
 =head2 EXTENSIONS
@@ -126,9 +133,15 @@ sub new {
 		trackname       => $trackname,
 	        tracknum        => '000',
 		track_options   => {},
+		allow_sampling  => 0,
 	       },ref $class || $class;
 }
-
+sub allow_sampling {
+    my $self = shift;
+    my $d    = $self->{allow_sampling};
+    $self->{allow_sampling} = shift if @_;
+    $d;
+}
 sub basedir  { shift->{base}     }
 sub wigfiles { shift->{wigfiles} }
 sub conf_stanzas {
@@ -168,12 +181,10 @@ sub conf_stanzas {
 	push @lines,"description = $options->{description}"
 	    if $options->{description};
 	if (my $color = $options->{color}) {
-	    push @lines,($options->{visibility} =~ /pack|dense/i ? "pos_color=" : "fgcolor=")
-		. format_color($color);
+	    push @lines,"bgcolor=".format_color($color);
 	}
 	if (my $color = $options->{altColor}) {
-	    push @lines,($options->{visibility} =~ /pack|dense/i ? "neg_color=" : "bgcolor=")
-		. format_color($color);
+	    push @lines,"fgcolor=" . format_color($color);
 	}
 	if (exists $options->{viewLimits} and my ($low,$hi) = split ':',$options->{viewLimits}) {
 	    push @lines,"min_score   =  $low";
@@ -358,7 +369,7 @@ sub minmax {
   my $seqids = ($self->current_track->{seqids} ||= {});
   my $chrom  = $self->{track_options}{chrom};
 
-  if ((my $size = stat($infh)->size) > BIG_FILE) {
+  if ($self->allow_sampling && (my $size = stat($infh)->size) > BIG_FILE) {
       warn "Wiggle file is very large; resorting to genome-wide sample statistics for $chrom.\n";
       $self->{FILEWIDE_STATS} ||= $self->sample_file($infh,BIG_FILE_SAMPLES);
       for (keys %{$self->{FILEWIDE_STATS}}) {
@@ -390,6 +401,7 @@ sub minmax {
   }
 
   for my $seqid (keys %stats) {
+      warn "seqid = $seqid, max=",$stats{$seqid}->max();
       $seqids->{$seqid}{min}    = $stats{$seqid}->min();
       $seqids->{$seqid}{max}    = $stats{$seqid}->max();
       $seqids->{$seqid}{mean}   = $stats{$seqid}->mean();
@@ -586,7 +598,7 @@ sub wigfile {
     my $span = $self->{track_options}{span} || 
 	$self->{track_options}{step}        || 
 	1;
-    my $trim      = $self->current_track->{display_options}{trim} || 'stdev2';
+    my $trim      = $self->current_track->{display_options}{trim} || 'stdev10';
     my $transform = $self->current_track->{display_options}{transform};
     my $wigfile = Bio::Graphics::Wiggle->new(
 					     $path,
@@ -608,6 +620,7 @@ sub wigfile {
 
 sub format_color {
   my $rgb = shift;
+  return $rgb unless $rgb =~ /\d+,\d+,\d+/;
   my ($r,$g,$b) = split ',',$rgb;
   my $hex = '#'.join '',map {sprintf("%02X",$_)}($r,$g,$b);
   return translate_color($hex);

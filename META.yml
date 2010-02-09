@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 1.995
+version: 2.00
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 1.995
+    version: 2.00
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -55,6 +55,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/cds.pm
   Bio::Graphics::Glyph::christmas_arrow:
     file: lib/Bio/Graphics/Glyph/christmas_arrow.pm
+  Bio::Graphics::Glyph::cross:
+    file: lib/Bio/Graphics/Glyph/cross.pm
   Bio::Graphics::Glyph::crossbox:
     file: lib/Bio/Graphics/Glyph/crossbox.pm
   Bio::Graphics::Glyph::dashed_line:
