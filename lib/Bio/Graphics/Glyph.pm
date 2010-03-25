@@ -94,11 +94,19 @@ sub my_options {
 	strand_arrow => [
 	    'boolean',
 	    undef,
-	    "Whether to indicate the feature's strandedness."],
+	    "Whether to indicate the feature's strandedness. If equal to 'ends'",
+	    "then only the right and left ends of multi-part features will show",
+	    "strandedness."
+	],
 	stranded => [
 	    'boolean',
 	    undef,
-	    'Synonym for -strand_arrow.'],
+	    'Synonym for -strand_arrow.',
+	    "Indicates whether to indicate the feature's strandedness. If equal to 'ends'",
+	    "then only the right and left ends of multi-part features will show",
+	    "strandedness."
+
+	],
 	key => [
 	    'string',
 	    undef,
@@ -1355,7 +1363,7 @@ sub filled_arrow {
   $orientation *= -1 if $self->{flip};
 
   my ($width) = $gd->getBounds;
-  my $indent = $y2-$y1 < $x2-$x1 ? $y2-$y1 : ($x2-$x1)/2;
+  my $indent  = $y2-$y1 < $x2-$x1 ? $y2-$y1 : ($x2-$x1)/2;
 
   my $panel        = $self->panel;
   my $offend_left  = $x1 < $panel->pad_left;
@@ -1434,7 +1442,8 @@ sub draw_component {
   return unless $x2 >= $panel->left and $x1 <= $panel->right;
 
   if ($self->stranded) {
-    $self->filled_arrow($gd,$self->feature->strand,
+    $self->filled_arrow($gd,
+			$self->feature->strand,
 			$x1, $y1,
 			$x2, $y2)
   } else {
@@ -1444,18 +1453,25 @@ sub draw_component {
   }
 }
 
+sub show_strand {
+    my $self = shift;
+    my $s = $self->option('strand_arrow');
+    return $s if defined $s;
+    return $self->option('stranded');
+}
 sub stranded {
   my $self = shift;
-  my $s = $self->option('strand_arrow') || $self->option('stranded');
+  my $s = $self->show_strand;
   return unless $s;
   return 1 unless $s eq 'ends';
+
   my $f       = $self->feature;
   my $strand  = $f->strand;
   $strand    *= -1 if $self->{flip};
   my $part_no = $self->{partno};
   my $parts   = $self->{total_parts};
   return ($strand > 0 && $part_no == $parts-1)
-    || ($strand < 0 && $part_no == 0);
+    ||   ($strand < 0 && $part_no == 0);
 }
 
 

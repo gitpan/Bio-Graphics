@@ -62,7 +62,16 @@ sub my_options {
 	  mismatch_color => [
 	      'color',
 	      'lightgrey',
-	      'The color to use for mismatched bases when displaying alignments.'],
+	      'The color to use for mismatched bases when displaying alignments.',
+	      'See L<Bio::Graphics::Glyph::segments/"Displaying Alignments">.'],
+	  indel_color => [
+	      'color',
+	      'lightgrey',
+	      'The color to use for indels when displaying alignments.'],
+	  mismatch_only => [
+	      'boolean',
+	      undef,
+	      'If true, only print mismatched bases when displaying alignments.'],
 	  true_target => [
 	      'boolean',
 	      undef,
@@ -83,6 +92,27 @@ sub my_options {
     }
 }
 
+sub mismatch_color {
+    my $self = shift;
+    my $c    = $self->option('mismatch_color') || 'lightgrey';
+    return $self->translate_color($c);
+}
+
+sub indel_color {
+    my $self = shift;
+    my $c    = $self->option('indel_color');
+    return $self->mismatch_color unless $c;
+    return $self->translate_color($c);
+}
+
+sub show_mismatch {
+    my $self = shift;
+    return $self->option('show_mismatch') || $self->option('mismatch_only');
+}
+
+sub mismatch_only { shift->option('mismatch_only') }
+
+
 sub pad_left {
   my $self = shift;
   return $self->SUPER::pad_left unless $self->level > 0;
@@ -92,10 +122,10 @@ sub pad_left {
 
   return $self->SUPER::pad_left 
     unless $self->draw_target && $ragged && $self->dna_fits;
-  my $target = eval {$self->feature->hit} or return $self->SUPER::pad_left;
-
-  return $self->SUPER::pad_left unless $target->start<$target->end && $target->start < $ragged;
-  return ($target->start-1) * $self->scale;
+  my $extra = 0;
+  my $target = eval {$self->feature->hit} or return $self->SUPER::pad_left + $extra;
+  return $self->SUPER::pad_left + $extra unless $target->start<$target->end && $target->start < $ragged;
+  return ($target->start-1) * $self->scale + $extra;
 }
 
 sub pad_right {
@@ -111,6 +141,11 @@ sub pad_right {
   return ($target->end-1) * $self->scale;
 }
 
+sub labelwidth {
+  my $self = shift;
+  return $self->SUPER::labelwidth unless $self->draw_target && $self->dna_fits && $self->label_position eq 'left';
+  return $self->{labelwidth} ||= (length($self->label||'')+1) * $self->font->width;
+}
 sub draw_target {
   my $self = shift;
   return if $self->option('draw_dna');
@@ -292,6 +327,69 @@ sub draw {
 
 }
 
+sub draw_component {
+    my $self = shift;
+    $self->SUPER::draw_component(@_);
+
+    return unless $self->show_mismatch;
+    my $mismatch_color = $self->mismatch_color;
+    my $feature = $self->feature;
+    my $start = $self->feature->start;
+    my (@mismatch_positions,@indel_positions);
+
+    if (my ($src,$matchstr,$tgt) = eval{$feature->padded_alignment}) {
+	my @src   = split '',$src;
+	my @match = split '',$matchstr;
+	my @tgt   = split '',$tgt;
+	my $pos   = $start;
+	for (my $i=0;$i<@src;$i++) {
+	    if (($src[$i] eq '-' || $tgt[$i] eq '-') && $i > 0 && $i < length $src) {
+		push @indel_positions,$pos;
+		next if $src[$i] eq '-';
+	    } else {
+		push @mismatch_positions,$pos unless $src[$i] eq $tgt[$i];
+	    }
+	    $pos++;
+	}
+    }
+
+    else {
+	my $sdna = eval {$feature->dna};
+	my $tdna = eval {$feature->target->dna};  # works with GFF files
+
+	return unless $sdna =~ /[gatc]/i;
+	return unless $tdna =~ /[gatc]/i;
+
+	my @src = split '',$sdna;
+	my @tgt = split '',$tdna;
+	for (my $i=0;$i<@src;$i++) {
+	    next if $src[$i] eq $tgt[$i];
+	    push @mismatch_positions,$i+$start;
+	}
+    }
+
+    my $gd = shift;
+    my ($x1,$y1,$x2,$y2) = $self->bounds(@_);
+
+    my @pixel_positions = $self->map_no_trunc(@mismatch_positions);
+
+    foreach (@pixel_positions) {
+	next if $_ < $x1;
+	next if $_ > $x2;
+	$gd->line($_,$y1+1,$_,$y2-1,$mismatch_color);
+    }
+
+    @pixel_positions = $self->map_no_trunc(@indel_positions);
+    my $indel = $self->indel_color;
+    foreach (@pixel_positions) {
+	next if $_ < $x1;
+	next if $_ > $x2;
+	$gd->line($_,$y1+1,$_,$y2-1,$indel);
+    }
+}
+
+# BUG: this horrible subroutine has grown without control and needs
+# to be broken down into manageable subrutines.
 sub draw_multiple_alignment {
   my $self = shift;
   my $gd   = shift;
@@ -301,7 +399,7 @@ sub draw_multiple_alignment {
   my $ragged_extra         = $self->option('ragged_start') 
                                ? RAGGED_START_FUZZ : $self->option('ragged_extra');
   my $true_target          = $self->option('true_target');
-  my $show_mismatch        = $self->option('show_mismatch');
+  my $show_mismatch        = $self->show_mismatch;
   my $do_realign           = $self->option('realign');
 
   my $pixels_per_base      = $self->scale;
@@ -325,14 +423,17 @@ sub draw_multiple_alignment {
   my ($bl,$bt,$br,$bb)     = $self->bounds($left,$top);
   $top = $bt;
 
+  my $stranded = $self->stranded;
   if (my @p = $self->parts) {
       for my $p (@p) {
-	  my @bounds = $p->bounds($left,$top);
-	  $self->filled_box($gd,@bounds,$self->bgcolor,$self->bgcolor);
+	  my ($x1,$y1,$x2,$y2) = $p->bounds($left,$top);
+	  $stranded ? $self->filled_arrow($gd,$strand,$x1-6,$y1,$x2+6,$y2)
+                    : $self->filled_box($gd,$x1,$y1,$x2,$y2,$self->bgcolor,$self->bgcolor);
       }
   } else {
-      my @bounds = $self->bounds($left,$top);
-      $self->filled_box($gd,@bounds,$self->bgcolor,$self->bgcolor);
+      my ($x1,$y1,$x2,$y2) = $self->bounds($left,$top);
+      $stranded ? $self->filled_arrow($gd,$strand,$x1-6,$y1,$x2+6,$y2)
+	        : $self->filled_box($gd,$x1,$y1,$x2,$y2,$self->bgcolor,$self->bgcolor);
   }
 
   my @s                     = $self->_subfeat($feature);
@@ -539,8 +640,9 @@ sub draw_multiple_alignment {
   my $lineheight = $font->height;
   my $fontwidth  = $font->width;
 
-  my $mismatch = $self->factory->translate_color($self->option('mismatch_color') || 'lightgrey');
-  my $grey     = $self->factory->translate_color('gray');
+  my $mismatch = $self->mismatch_color;
+  my $indel    = $self->indel_color;
+  my $grey     = $self->translate_color('gray');
 
   my $base2pixel = 
     $self->flip ?
@@ -554,11 +656,12 @@ sub draw_multiple_alignment {
 	$fontwidth/2 + $left + ($abs_start + $src-$panel_start-1 + $tgt) * $pixels_per_base - 1;    
       };
 
+  my $mismatch_only = $self->mismatch_only;
   my ($tgt_last_end,$src_last_end,$leftmost,$rightmost);
   for my $seg (sort {$a->[SRC_START]<=>$b->[SRC_START]} @segments) {
     my $y = $top-1;
-
-    for (my $i=0; $i<$seg->[SRC_END]-$seg->[SRC_START]+1; $i++) {
+    my $end = $seg->[SRC_END]-$seg->[SRC_START];
+    for (my $i=0; $i<$end+1; $i++) {
 
       my $src_base = $self->_subsequence($ref_dna,$seg->[SRC_START]+$i,$seg->[SRC_START]+$i);
       my $tgt_base = $self->_subsequence($tgt_dna,$seg->[TGT_START]+$i,$seg->[TGT_START]+$i);
@@ -568,16 +671,45 @@ sub draw_multiple_alignment {
 
       next unless $tgt_base && $x >= $panel_left && $x <= $panel_right;
 
-      $self->filled_box($gd,
-			$i == 0 ? $x-3 : $x-$pixels_per_base/2+3,
-			$y+1,
-			$x+$pixels_per_base/2+3,
-			$y+$lineheight,
-			$mismatch,$mismatch)
-	if $show_mismatch && $tgt_base && $src_base ne $tgt_base && $tgt_base !~ /[nN]/;
-      $tgt_base = $complement{$tgt_base} if $true_target && $strand < 0;
-      $gd->char($font,$x,$y,$tgt_base,$tgt_base =~ /[nN]/ ? $grey : $color);
+      my $is_mismatch = $show_mismatch && $tgt_base && $src_base ne $tgt_base && $tgt_base !~ /[nN]/;
 
+      if ($show_mismatch && $is_mismatch) {
+	  my $left  = $i == 0    ? $x-6                        : $x-$pixels_per_base/2;
+	  my $right = $i == $end ? $x+$pixels_per_base         : $x+$pixels_per_base/2 + 3;
+	  my $top   = $y+2;
+	  my $bottom= $y+$lineheight   - 1;
+	  my $middle= $y+$lineheight/2 + 1;
+	  my $pkg  = $self->polygon_package;
+
+	  if ($self->stranded && $i==0 && $self->strand < 0) {
+	      my $poly = $pkg->new;
+	      $poly->addPt($right,$top);
+	      $poly->addPt($left+5,$top);
+	      $poly->addPt($left,$middle);
+	      $poly->addPt($left+5,$bottom);
+	      $poly->addPt($right,$bottom);
+	      $gd->filledPolygon($poly,$mismatch);
+	  } elsif ($self->stranded && $i==$end && $strand > 0) {
+	      my $poly = $pkg->new;
+	      $poly->addPt($left,$top);
+	      $poly->addPt($right-5,$top);
+	      $poly->addPt($right,$middle);
+	      $poly->addPt($right-5,$bottom);
+	      $poly->addPt($left,$bottom);
+	      $gd->filledPolygon($poly,$mismatch);
+	  } else {
+	      $self->filled_box($gd,
+				$left,
+				$top,
+				$right,
+				$bottom,
+				$mismatch,$mismatch);
+	  }
+      }
+    
+      $tgt_base = $complement{$tgt_base} if $true_target && $strand < 0;
+      $gd->char($font,$x,$y,$tgt_base,$tgt_base =~ /[nN]/ ? $grey : $color)
+	  unless $mismatch_only && !$is_mismatch;
       $drew_sequence++;
     }
 
@@ -599,7 +731,7 @@ sub draw_multiple_alignment {
 	next if $gap_left <= $panel_left || $gap_right >= $panel_right;
 
 	$self->filled_box($gd,$gap_left,$y+1,
-			      $gap_right-2,$y+$lineheight,$mismatch,$mismatch) if
+			      $gap_right-2,$y+$lineheight,$indel,$indel) if
 				$show_mismatch && $gap_left >= $panel_left && $gap_right <= $panel_right;
 
 
@@ -628,7 +760,7 @@ sub draw_multiple_alignment {
 	for (my $i=0;$i<$delta-1;$i++) {
 	  my $x = $base2pixel->($src_last_end,$i+1);
 	  next if $x > $panel_right;
-	  $self->filled_box($gd,$x-$pixels_per_base/2+2,$y,$x+$pixels_per_base/2+1,$y+$lineheight,$mismatch,$mismatch)
+	  $self->filled_box($gd,$x-$pixels_per_base/2+2,$y,$x+$pixels_per_base/2+1,$y+$lineheight,$indel,$indel)
 	    if $show_mismatch;
 	  $gd->char($font,$x,$y,'-',$color);
 	}
@@ -876,7 +1008,15 @@ In addition, the following glyph-specific options are recognized:
                  the mismatch color.  
                  See "Displaying Alignments".
 
+  -mismatch_only When combined with -draw_target,     0 (false)
+                 draws only the mismatched bases
+                 in the alignment. Implies
+                 -show_mismatch.
+                 See "Displaying Alignments".
+
   -mismatch_color The mismatch color to use           'lightgrey'
+
+  -indel_color   The color to use for small indels.   'lightgrey'
 
   -true_target   Show the target DNA in its native    0 (false)
                  (plus strand) orientation, even if

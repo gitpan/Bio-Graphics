@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 2.01
+version: 2.02
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.01
+    version: 2.02
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -198,6 +198,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/wiggle_density.pm
   Bio::Graphics::Glyph::wiggle_minmax:
     file: lib/Bio/Graphics/Glyph/wiggle_minmax.pm
+  Bio::Graphics::Glyph::wiggle_whiskers:
+    file: lib/Bio/Graphics/Glyph/wiggle_whiskers.pm
   Bio::Graphics::Glyph::wiggle_xyplot:
     file: lib/Bio/Graphics/Glyph/wiggle_xyplot.pm
   Bio::Graphics::Glyph::xyplot:
@@ -213,8 +215,11 @@ provides:
     file: lib/Bio/Graphics/Util.pm
   Bio::Graphics::Wiggle:
     file: lib/Bio/Graphics/Wiggle.pm
+    version: 1.0
   Bio::Graphics::Wiggle::Loader:
     file: lib/Bio/Graphics/Wiggle/Loader.pm
+  Bio::Graphics::WiggleCompressed:
+    file: lib/Bio/Graphics/WiggleCompressed.pm
 generated_by: Module::Build version 0.3
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

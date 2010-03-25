@@ -7,6 +7,13 @@ use base qw(Bio::Graphics::Glyph::transcript);
 
 use constant MIN_WIDTH_FOR_ARROW => 8;
 
+sub show_strand { 
+    my $self = shift;
+    my $s    = $self->SUPER::show_strand;
+    return $s if defined $s;
+    return 'ends';
+}
+
 sub extra_arrow_length {
   my $self = shift;
   my $strand = $self->feature->strand || 0;
@@ -87,7 +94,7 @@ sub draw_component {
   $filled = 0 if $str < 0 && $rect[0] < $self->panel->pad_left;
   $filled = 0 if $str > 0 && $rect[2] > $pwidth - $self->panel->pad_right;
 
-  if ($filled) {
+  if ($self->stranded && $filled) {
     my ($first,$last)  = ($self->{partno} == 0 , $self->{partno} == $self->{total_parts}-1);
     ($first,$last)     = ($last,$first) if $self->{flip};
 
@@ -96,12 +103,12 @@ sub draw_component {
     } elsif ($strand >= 0 && $last) { # last exon, plus strand
       $self->filled_arrow($gd,+1,@rect);
     } else {
-      $self->SUPER::draw_component($gd,@_);
+	$self->filled_box($gd,@rect);
     }
   }
 
   else {
-    $self->SUPER::draw_component($gd,@_);
+      $self->filled_box($gd,@rect);
   }
 
 }
