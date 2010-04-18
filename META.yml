@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 2.03
+version: 2.04
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -10,15 +10,15 @@ resources:
 requires:
   Bio::Root::Version: 1.005009001
   GD: 2.3
+  Statistics::Descriptive: 2.6
 recommends:
   Bio::SCF: 1.01
   GD::SVG: 0.32
-  Statistics::Descriptive: 2.6
   Text::ParseWords: 3.26
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.03
+    version: 2.04
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
