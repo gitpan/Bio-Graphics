@@ -1,6 +1,6 @@
 ---
 name: Bio-Graphics
-version: 2.02
+version: 2.03
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 abstract: Generate GD images of Bio::Seq objects
@@ -18,7 +18,7 @@ recommends:
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.02
+    version: 2.03
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
