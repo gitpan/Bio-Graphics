@@ -1,24 +1,19 @@
 ---
-name: Bio-Graphics
-version: 2.07
+abstract: 'Generate GD images of Bio::Seq objects'
 author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
-abstract: Generate GD images of Bio::Seq objects
+configure_requires:
+  Module::Build: 0.36
+generated_by: 'Module::Build version 0.3603'
 license: perl
-resources:
-  license: http://dev.perl.org/licenses/
-requires:
-  Bio::Root::Version: 1.005009001
-  GD: 2.3
-  Statistics::Descriptive: 2.6
-recommends:
-  Bio::SCF: 1.01
-  GD::SVG: 0.32
-  Text::ParseWords: 3.26
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Bio-Graphics
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.07
+    version: 2.08
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -218,9 +213,14 @@ provides:
     version: 1.0
   Bio::Graphics::Wiggle::Loader:
     file: lib/Bio/Graphics/Wiggle/Loader.pm
-  Bio::Graphics::WiggleCompressed:
-    file: lib/Bio/Graphics/WiggleCompressed.pm
-generated_by: Module::Build version 0.3
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.2.html
-  version: 1.2
+recommends:
+  Bio::SCF: 1.01
+  GD::SVG: 0.32
+  Text::ParseWords: 3.26
+requires:
+  Bio::Root::Version: 1.005009001
+  GD: 2.3
+  Statistics::Descriptive: 2.6
+resources:
+  license: http://dev.perl.org/licenses/
+version: 2.08
