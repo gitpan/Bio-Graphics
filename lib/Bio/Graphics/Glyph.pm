@@ -768,6 +768,7 @@ sub layout_sort {
     my $self = shift;
     my $sortfunc;
 
+
     my $opt = $self->code_option("sort_order");
 
     if (!$opt) {
@@ -816,7 +817,6 @@ sub layout_sort {
 
     # cache this
     # $self->factory->set_option(sort_order => $sortfunc);
-
     my @things = sort $sortfunc @_;
     return @things;
 }
@@ -831,7 +831,7 @@ sub layout {
       $self->height + $self->pad_top + $self->pad_bottom unless @parts;
 
   my $bump_direction = $self->bump;
-  my $bump_limit = $self->option('bump_limit') || -1;
+  my $bump_limit     = $self->bump_limit || -1;
 
   $_->layout foreach @parts;  # recursively lay out
 
@@ -892,7 +892,9 @@ sub layout {
 	# my $collision = $self->collides(\%bin2,CM3,CM4,$left,$pos,$right,$bottom) or last;
 	
 	if ($bump_direction > 0) {
-	    $pos += $collision->[3]-$collision->[1] + BUMP_SPACING;    # collision, so bump
+# old bug here
+#	    $pos += $collision->[3]-$collision->[1] + BUMP_SPACING;    # collision, so bump
+	    $pos = $collision->[3] + BUMP_SPACING;    # collision, so bump
 	} else {
 	    $pos -= BUMP_SPACING;
 	}
@@ -902,7 +904,6 @@ sub layout {
     
     $g->move(0,$pos);
     $self->add_collision(\%bin1,CM1,CM2,$left,$g->top,$right,$g->bottom);
-    #$self->add_collision(\%bin2,CM3,CM4,$left,$g->top,$right,$g->bottom);
     
     $recent_pos = $pos;
     $max_pos    = $pos if $pos > $max_pos;
@@ -1041,6 +1042,8 @@ sub draw {
 }
 
 sub connector { return }
+
+sub bump_limit { shift->option('bump_limit') }
 
 # the "level" is the level of testing of the glyph
 # groups are level -1, top level glyphs are level 0, subcomponents are level 1 and so forth.

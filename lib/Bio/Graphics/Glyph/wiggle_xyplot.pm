@@ -64,6 +64,14 @@ sub pad_top {
   $pad;
 }
 
+sub pad_left {
+    my $self = shift;
+    my $pad  = $self->SUPER::pad_left(@_);
+    return $pad unless $self->option('variance_band');
+    $pad    += length('+1sd')/2 * $self->font('gdTinyFont')->width+3;
+    return $pad;
+}
+
 # we override the draw method so that it dynamically creates the parts needed
 # from the wig file rather than trying to fetch them from the database
 sub draw {
@@ -327,15 +335,28 @@ sub draw_label {
     my $self = shift;
     my ($gd,$left,$top,$partno,$total_parts) = @_;
     return $self->SUPER::draw_label(@_) unless $self->option('variance_band');
-    my $font  = $self->font('gdTinyFont');
-    $left -= length('+1sd') * $font->width;
     return $self->SUPER::draw_label($gd,$left,$top,$partno,$total_parts);
 }
 
 sub global_mean_and_variance {
     my $self = shift;
-    my $wig = $self->wig or return;
-    return ($wig->mean,$wig->stdev);
+    if (my $wig = $self->wig) {
+	return ($wig->mean,$wig->stdev);
+    } elsif ($self->feature->can('global_mean')) {
+	my $f = $self->feature;
+	return ($f->global_mean,$f->global_stdev);
+    }
+    return;
+}
+
+sub global_min_max {
+    my $self = shift;
+    if (my $wig = $self->wig) {
+	return ($wig->min,$wig->max);
+    } elsif (my $stats = eval {$self->feature->global_stats}) {
+	return ($stats->{minVal},$stats->{maxVal});
+    }
+    return;
 }
 
 sub wig {
@@ -347,8 +368,8 @@ sub wig {
 
 sub series_mean {
     my $self = shift;
-    my $wig = $self->wig or return;
-    return eval {$wig->mean} || undef;
+    my ($mean) = $self->global_mean_and_variance;
+    return $mean;
 }
 
 sub series_min {

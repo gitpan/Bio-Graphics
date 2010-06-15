@@ -11,6 +11,23 @@ explicitly.
 END
 }
 
+sub my_options {
+    return
+    {
+	group_label => [
+	    'boolean',
+	    undef,
+	    'Attach a label to the group; this is independent of the label option which applies',
+	    'to features within the group'
+	    ],
+	group_label_position => [
+	    [qw(top left)],
+	    'left',
+	    'Position in which to draw the group label.'
+	],
+    }
+}
+
 # group sets connector to 'dashed'
 sub connector {
   my $self = shift;
@@ -20,7 +37,33 @@ sub connector {
 }
 
 # we don't label group (yet)
-sub label { 0 }
+sub label { my $self = shift;
+	    return $self->{_group_label} if exists $self->{_group_label};
+	    return $self->{_group_label}  = $self->option('group_label') ? $self->feature->display_name : '' 
+}
+
+sub labelfont {
+  my $self = shift;
+  return $self->getfont('groupfont','gdMediumBoldFont');
+}
+
+sub pad_left { 
+    my $self = shift;
+    return 0 unless $self->option('group_label');
+    return length($self->label||'') * $self->labelfont->width+3;
+}
+
+sub draw {
+    my $self = shift;
+    $self->SUPER::draw(@_) if $self->feature_has_subparts;
+    $self->draw_label(@_)  if $self->option('group_label');
+}
+
+sub label_position { 
+    my $self = shift;
+    my $pos  = $self->option('group_label_position') || 'left';
+    return $pos;
+}
 
 sub new {
   my $self = shift;
@@ -30,11 +73,11 @@ sub new {
 
 # don't allow simple bumping in groups -- it looks terrible...
 sub bump {
-  my $bump = shift->SUPER::bump(@_);
-  return unless defined $bump;
-  return 1  if $bump >  1;
-  return -1 if $bump < -1;
-  return $bump;
+    my $self = shift;
+    my $bump = $self->SUPER::bump(@_);
+    return 1  if $bump >  1;
+    return -1 if $bump < -1;
+    return $bump;
 }
 
 1;
