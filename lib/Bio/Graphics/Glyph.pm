@@ -227,7 +227,7 @@ sub new {
   my @subfeatures;
   my @subglyphs;
 
-  warn $self if DEBUG;
+  warn $self    if DEBUG;
   warn $feature if DEBUG;
 
   @subfeatures         = $self->subfeat($feature);
@@ -260,6 +260,8 @@ sub new {
     $self->{feature_count} = scalar @subglyphs;
     $self->{parts}         = \@subglyphs;
   }
+
+#  warn "type=",$feature->type,", glyph=$self, subglyphs=@subglyphs";
 
   my ($start,$stop) = ($self->start, $self->stop);
   if (defined $start && defined $stop && $start ne '') {  # more paranoia
@@ -407,7 +409,7 @@ sub add_feature {
       my $count   = $self->_bump_feature_count;
 
       if (!$limit || $count <= $limit) {
-	  push @$parts,$factory->make_glyph(0,$feature);	  
+	  push @$parts,$factory->make_glyph(0,$feature);
       } elsif (rand() < $limit/$count) {
 	  $self->features_clipped(1);
 	  $parts->[rand @$parts] = $factory->make_glyph(0,$feature); # subsample
@@ -1142,7 +1144,6 @@ sub _connector {
 sub draw_connector {
   my $self   = shift;
   my $gd     = shift;
-
   my $color          = $self->connector_color;
   my $connector_type = $self->connector or return;
 
