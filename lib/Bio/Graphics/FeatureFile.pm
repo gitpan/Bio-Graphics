@@ -482,7 +482,7 @@ sub file_mtime {
 	my $cwd = getcwd();
 	chdir(dirname($file));
 
-
+        local $_;
 	while (<$fh>) {
 	    if (/^\#exec/) {
 		return time();  # now!
@@ -714,6 +714,7 @@ sub smart_features {
 sub parse_argv {
   my $self = shift;
   local $/ = "\n";
+  local $_;
   while (<>) {
     chomp;
     $self->parse_line($_);
@@ -740,6 +741,7 @@ sub parse_fh {
     my $fh   = shift;
     $self->_stat($fh);
     local $/ = "\n";
+    local $_;
     while (<$fh>) {
 	chomp;
 	$self->parse_line($_) || last;
@@ -1733,9 +1735,8 @@ sub initialize_code {
 sub base2package {
   my $self = shift;
   return $self->{base2package} if exists $self->{base2package};
-  (my $package = overload::StrVal($self)) =~ s/[^a-z0-9A-Z_]/_/g;
-  $package     =~ s/^[^a-zA-Z_]/_/g;
-  return $self->{base2package} = $package;
+  my $rand     = int rand(1000000);
+  return $self->{base2package} = "Bio::Graphics::FeatureFile::CallBack::P$rand";
 }
 
 sub split_group {
