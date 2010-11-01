@@ -6,6 +6,7 @@ use strict;
 use Carp 'croak','cluck';
 use constant BUMP_SPACING => 2; # vertical distance between bumped glyphs
 use Bio::Root::Version;
+use Bio::Graphics::Layout;
 
 use Memoize 'memoize';
 memoize('options') unless $^O =~ /mswin/i;
@@ -22,6 +23,8 @@ use constant CM1 => 20; # big bin, x axis
 use constant CM2 => 20; # big bin, y axis
 use constant CM3 => 50;  # small bin, x axis
 use constant CM4 => 50;  # small bin, y axis
+use constant INF  => 1<<16;
+use constant NINF => -INF();
 use constant DEBUG => 0;
 
 use constant QUILL_INTERVAL => 8;  # number of pixels between Jim Kent style intron "quills"
@@ -131,7 +134,7 @@ sub my_options {
 	    'for subfeatures. A value of undef allows unlimited traversal. A value of',
 	    '0 suppresses traversal entirely for the same effect as -no_subparts.'],
 	sort_order => [
-	    ['left','right','low_score','high_score','longer','shorter','strand','name'],
+	    ['left','right','low_score','high_score','longest','shortest','strand','name'],
 	    'left',
 	    'Control how features are layed out so that more "important" features sort',
 	    'towards the top. See the Bio::Graphics::Glyph documentation for a description of how this' ,
@@ -144,11 +147,11 @@ sub my_options {
 	    'integer',
 	    1,
 	    'This option dictates the behavior of the glyph when two features collide horizontally.',
-	    'A value of +1 will bump the colliding feature downward using an algorithm that uses spaces most efficiently.',
+	    'A value of +1 will bump the colliding feature downward using an algorithm that uses spaces efficiently.',
 	    'A value of -1 will bump the colliding feature upward using the same algorithm.',
 	    'Values of +2 and -2 will bump using a simple algorithm that is faster but does not use space as efficiently.',
 	    'A value of 3 or "fast" will turn on a faster collision detection algorithm which',
-	    'only works correctly when all features have the same height.',
+	    'is only compatible with the default "left" sorting order.',
 	    'A value of 0 suppresses collision control entirely.'],
 	bump_limit => [
 	    'integer',
@@ -654,6 +657,7 @@ sub translate_color {
 #              -1   bump up
 #              +2   simple bump down
 #              -2   simple bump up
+#              +3   optimized (fast) bumping
 sub bump {
   my $self = shift;
   return $self->option('bump');
@@ -770,7 +774,6 @@ sub layout_sort {
     my $self = shift;
     my $sortfunc;
 
-
     my $opt = $self->code_option("sort_order");
 
     if (!$opt) {
@@ -835,6 +838,11 @@ sub layout {
   my $bump_direction = $self->bump;
   my $bump_limit     = $self->bump_limit || -1;
 
+  $bump_direction = 'fast' if 
+      $bump_direction && 
+      $bump_direction == 1 && 
+      !$self->code_option('sort_order');
+
   $_->layout foreach @parts;  # recursively lay out
 
   # no bumping requested, or only one part here
@@ -847,9 +855,9 @@ sub layout {
     return $self->{layout_height} = $highest + $self->pad_top + $self->pad_bottom;
   }
 
-  # fast layout requested
   if ($bump_direction eq 'fast' or $bump_direction == 3) {
-      return $self->{layout_height} = $self->faster_layout(\@parts);
+      return $self->{layout_height} = $self->optimized_layout(\@parts)
+	  + $self->pad_bottom + $self->pad_top -1;# - $self->top  + 1;
   }
 
   my (%bin1,%bin2);
@@ -894,8 +902,6 @@ sub layout {
 	# my $collision = $self->collides(\%bin2,CM3,CM4,$left,$pos,$right,$bottom) or last;
 	
 	if ($bump_direction > 0) {
-# old bug here
-#	    $pos += $collision->[3]-$collision->[1] + BUMP_SPACING;    # collision, so bump
 	    $pos = $collision->[3] + BUMP_SPACING;    # collision, so bump
 	} else {
 	    $pos -= BUMP_SPACING;
@@ -975,29 +981,35 @@ sub _collision_keys {
   @keys;
 }
 
-# a faster layout that only works if all parts have the same height
-sub faster_layout {
-    my $self   = shift;
-    my $parts  = shift;
-    my $height   = $parts->[0]{layout_height}+BUMP_SPACING-1;
-    my $hspacing = $self->hbumppad;
+# jbrowse layout that acts by keeping track of contours of the free space
+sub optimized_layout {
+    my $self = shift;
+    my $parts = shift;
 
-    my @rows;  # each slot is the rightmost position in that row
-    for my $part ($self->layout_sort(@$parts)) {
-	my $placed;
-	my $left = $part->left;
-	for (my $row=0;!$placed;$row++) {
-	    if (!$rows[$row]
-		||
-		$rows[$row] < $left) {
-		$part->move(0,$row*$height);
-		$rows[$row]=$part->right+$hspacing;
-		$placed++;
-	    }
+    my $hspacing   = $self->hbumppad;
+    my $bump_limit = $self->bump_limit;
+
+    my @rects = map {
+	$_ => [
+	    $_->left,
+	    $_->right + $hspacing,
+	    $_->{layout_height}+BUMP_SPACING
+	    ]
+    } $self->layout_sort(@$parts);
+    
+    my $layout = Bio::Graphics::Layout->new(0,$self->panel->right);
+    my $overbumped;
+    while (@rects) {
+	my ($part,$rect) = splice(@rects,0,2);
+	my $offset = $layout->addRect("$part",@$rect);
+	if ($overbumped && $offset > $overbumped) {
+	    $part->move(0,$overbumped);
+	    next;
 	}
+	$part->move(0,$offset);
+	$overbumped = $offset if $bump_limit > 0 && $offset >= $bump_limit * $rect->[2];
     }
-
-    return @rows*$height; #+$self->pad_top+$self->pad_bottom;
+    return $overbumped && $overbumped < $layout->totalHeight ? $overbumped : $layout->totalHeight;
 }
 
 sub draw {
@@ -1367,7 +1379,7 @@ sub filled_arrow {
   my $self = shift;
   my $gd   = shift;
   my $orientation = shift;
-  my ($x1,$y1,$x2,$y2,$fg,$bg)  = @_;
+  my ($x1,$y1,$x2,$y2,$fg,$bg,$force)  = @_;
 
   $orientation *= -1 if $self->{flip};
 
@@ -1379,15 +1391,14 @@ sub filled_arrow {
   my $offend_right = $x2 > $panel->width + $panel->pad_left;
 
   return $self->filled_box($gd,@_)
-    if ($orientation == 0)
-      or ($x1 < 0 && $orientation < 0)
-        or ($x2 > $width && $orientation > 0)
-	  or ($indent <= 0)
-	    or ($x2 - $x1 < 3)
-  	      or ($offend_left && $orientation < 0)
-	        or ($offend_right && $orientation > 0);
-	    
-
+      if !$force &&
+      (($orientation == 0)
+       or ($x1 < 0 && $orientation < 0)
+       or ($x2 > $width && $orientation > 0)
+       or ($indent <= 0)
+       or ($x2 - $x1 < 3)
+       or ($offend_left && $orientation < 0)
+       or ($offend_right && $orientation > 0));
 
   $fg   ||= $self->fgcolor;
   $bg   ||= $self->bgcolor;
@@ -2282,7 +2293,7 @@ different built-in values for changing the default sort order (which
 is by "left" position): "low_score" (or "high_score") will cause
 features to be sorted from lowest to highest score (or vice versa).
 "left" (or "default") and "right" values will cause features to be
-sorted by their position in the sequence.  "longer" (or "shorter")
+sorted by their position in the sequence.  "longest" (or "shortest")
 will cause the longest (or shortest) features to be sorted first, and
 "strand" will cause the features to be sorted by strand: "+1"
 (forward) then "0" (unknown, or NA) then "-1" (reverse).  Finally,

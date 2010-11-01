@@ -1,9 +1,20 @@
 Revision history for Perl extension Bio::Graphics.
  
+2.15
+     - Fixed documentation bug: sort_order options to sort by feature length should be
+       "longest" and "shortest" rather than "longer and "shorter".
+     - Improved layout algorithm, achieving speedup of ~4x on busy tracks.
+     - Fixed font color problems when displaying multiple alignments at DNA level in
+       the segments glyph.
+     - Fixed problem of DNA alignment indels disappearing from view when they span entire region.
+     - Fixed problem of mismatch and indel colors leaking off ends of feature arrows.
+
 2.14
      - Fixes to the way that "fast bump" works so that tracks never fast bump.
        This fixes problems when using groups to simulate subtracks, and the
        groups are of different heights.
+     - The group glyph will now add the group labels to the list of track keys
+       stored in the panel and retrieved from the call to $panel->key_boxes().
 
 2.13
      - Changed default namespace for callbacks to make them portable across freeze/thaw

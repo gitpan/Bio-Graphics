@@ -235,7 +235,6 @@ sub map_no_trunc {
 
 sub scale {
   my $self = shift;
-  # $self->{scale} ||= ($self->{width}-$self->pad_left-$self->pad_right)/($self->length);
   $self->{scale} ||= $self->width/($self->length);
 }
 
@@ -248,7 +247,6 @@ sub width {
   my $d = $self->{width};
   $self->{width} = shift if @_;
   $d;
-#  $d + $self->pad_left + $self->pad_right;
 }
 
 sub left {
@@ -555,7 +553,7 @@ sub gd {
 			 $offset+$track->layout_height
 			 + ($between_key ? $self->{key_font}->height : 0),
 			 $track->tkcolor)
-      if defined $track->tkcolor;
+	if defined $track->tkcolor;
     $offset += $keyheight if $draw_between;
     $offset += $track->layout_height + $spacing;
   }
@@ -2287,9 +2285,13 @@ value of +2 or -2 to activate a very simple type of collision control
 in which each feature occupies its own line. This is useful for
 showing dense, nearly-full length features such as similarity hits.
 Finally, a bump of 3 or the string "fast" will turn on a faster
-collision-detection algorithm that works well when all features have
-identical height.  The bump argument can also be a code reference; see
+collision-detection algorithm that only works properly with the
+default "left" sort order.  The bump argument can also be a code reference; see
 below.
+
+For convenience and backwards compatibility, if you specify a -bump
+of 1 and use the default sort order, the faster algorithm will be
+used.
 
 If you would like to see more horizontal whitespace between features
 that occupy the same line, you can specify it with the B<-hbumppad>

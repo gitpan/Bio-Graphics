@@ -13,7 +13,7 @@ name: Bio-Graphics
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.14
+    version: 2.15
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -129,6 +129,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/ragged_ends.pm
   Bio::Graphics::Glyph::rainbow_gene:
     file: lib/Bio/Graphics/Glyph/rainbow_gene.pm
+  Bio::Graphics::Glyph::read_pair:
+    file: lib/Bio/Graphics/Glyph/read_pair.pm
   Bio::Graphics::Glyph::redgreen_box:
     file: lib/Bio/Graphics/Glyph/redgreen_box.pm
   Bio::Graphics::Glyph::redgreen_segment:
@@ -181,6 +183,9 @@ provides:
     file: lib/Bio/Graphics/Glyph/triangle.pm
   Bio::Graphics::Glyph::two_bolts:
     file: lib/Bio/Graphics/Glyph/two_bolts.pm
+  Bio::Graphics::Glyph::vista_plot:
+    file: lib/Bio/Graphics/Glyph/vista_plot.pm
+    version: 1.0
   Bio::Graphics::Glyph::wave:
     file: lib/Bio/Graphics/Glyph/wave.pm
   Bio::Graphics::Glyph::weighted_arrow:
@@ -200,6 +205,10 @@ provides:
   Bio::Graphics::Glyph::xyplot:
     file: lib/Bio/Graphics/Glyph/xyplot.pm
     version: 0
+  Bio::Graphics::Layout:
+    file: lib/Bio/Graphics/Layout.pm
+  Bio::Graphics::Layout::Contour:
+    file: lib/Bio/Graphics/Layout.pm
   Bio::Graphics::Panel:
     file: lib/Bio/Graphics/Panel.pm
   Bio::Graphics::Pictogram:
@@ -213,6 +222,8 @@ provides:
     version: 1.0
   Bio::Graphics::Wiggle::Loader:
     file: lib/Bio/Graphics/Wiggle/Loader.pm
+  Math:
+    file: lib/Bio/Graphics/Layout.pm
 recommends:
   Bio::SCF: 1.01
   GD::SVG: 0.32
@@ -223,4 +234,4 @@ requires:
   Statistics::Descriptive: 2.6
 resources:
   license: http://dev.perl.org/licenses/
-version: 2.14
+version: 2.15

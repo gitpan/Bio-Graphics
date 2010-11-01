@@ -1,0 +1,10 @@
+^MYMETA.yml$
+\.svn
+^\.cvsignore
+~$
+\#
+^_build
+\.tar\.gz$
+^blib
+^Build$
+^\w+\.pl$
