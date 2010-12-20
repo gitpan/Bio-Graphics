@@ -43,12 +43,27 @@ sub my_options {
 	    'the mean and standard deviation of the data set. Only of use when a wig',
 	    'file is provided.'
         ],
+	z_score_bounds => [
+	    'integer',
+            4,
+	    'When using z_score autoscaling, this option controls how many standard deviations',
+	    'above and below the mean to show.'
+	],
 	autoscale => [
-	    ['local','global'],
-            'local',
+	    ['local','chromosome','global','z_score','clipped_global'],
+            'clipped_global',
 	    'If set to "global" , then the minimum and maximum values of the XY plot',
-	    'will be taken from the wiggle file as a whole. Otherwise, the plot will be',
-	    'scaled to the minimum and maximum values of the region currently on display.'
+	    'will be taken from the wiggle file as a whole. If set to "chromosome", then',
+            'scaling will be to minimum and maximum on the current chromosome.',
+	    '"clipped_global" is similar to "global", but clips the top and bottom values',
+	    'to the multiples of standard deviations indicated by "z_score_bounds"',
+	    'If set to "z_score", then the whole plot will be rescaled to z-scores in which',
+	    'the "0" value corresponds to the mean across the genome, and the units correspond',
+	    'to standard deviations above and below the mean. The number of SDs to show are',
+	    'controlled by the "z_score_bound" option.',
+	    'Otherwise, the plot will be',
+	    'scaled to the minimum and maximum values of the region currently on display.',
+	    'min_score and max_score override autoscaling if one or both are defined'
         ],
     };
 }
@@ -200,18 +215,28 @@ sub draw_plot {
     $self->panel->startGroup($gd);
 
     my ($left,$top,$right,$bottom) = $self->calculate_boundaries($dx,$dy);
-    my ($min_score,$max_score)     = $self->minmax($parts);
-    my $side = $self->_determine_side();
 
-    # if a scale is called for, then we adjust the max and min to be even
-    # multiples of a power of 10.
-    if ($side) {
-	$max_score = Bio::Graphics::Glyph::xyplot::max10($max_score);
-	$min_score = Bio::Graphics::Glyph::xyplot::min10($min_score);
+    # There is a minmax inherited from xyplot as well as wiggle_minmax, and I don't want to
+    # rely on Perl's multiple inheritance DFS to find the right one.
+    my ($min_score,$max_score,$mean,$stdev)     = $self->Bio::Graphics::Glyph::wiggle_minmax::minmax($parts);
+    my $rescale  = $self->option('autoscale') eq 'z_score';
+    my $side    = $self->_determine_side();
+
+    my ($scaled_min,$scaled_max);
+    if ($rescale) {
+	my $bound  = $self->z_score_bound;
+	$scaled_min = -$bound;
+	$scaled_max = +$bound;
+    }
+    elsif ($side) {
+	$scaled_min = int($min_score - 0.5);
+	$scaled_max = int($max_score + 0.5);
+    } else {
+	($scaled_min,$scaled_max) = ($min_score,$max_score);
     }
 
     my $height = $bottom - $top;
-    my $y_scale  = $max_score > $min_score ? $height/($max_score-$min_score)
+    my $y_scale  = $scaled_max > $scaled_min ? $height/($scaled_max-$scaled_min)
 	                                   : 1;
     my $x = $left;
     my $y = $top;
@@ -226,25 +251,29 @@ sub draw_plot {
     $y += $self->pad_top;
 
     # position of "0" on the scale
-    my $y_origin = $min_score <= 0 && $pivot ne 'min' ? $bottom - (0 - $min_score) * $y_scale : $bottom;
-    $y_origin    = $top if $max_score < 0 && $pivot ne 'min' || $pivot eq 'max';
+    my $y_origin = $scaled_min <= 0 && $pivot ne 'min' ? $bottom - (0 - $scaled_min) * $y_scale : $bottom;
     $y_origin    = int($y_origin+0.5);
 
-    $self->_draw_scale($gd,$x_scale,$min_score,$max_score,$dx,$dy,$y_origin);
-    return unless $max_score > $min_score;
+    $self->panel->startGroup($gd);
+    $self->_draw_grid($gd,$x_scale,$scaled_min,$scaled_max,$dx,$dy,$y_origin) unless ($self->option('no_grid') == 1);
+    $self->panel->endGroup($gd);
+
+    return unless $scaled_max > $scaled_min;
 
     my $lw       = $self->linewidth;
     my $positive = $self->pos_color;
     my $negative = $self->neg_color;
     my $midpoint = $self->midpoint;
     my $flip     = $self->{flip};
+    $midpoint    = ($midpoint - $mean)/$stdev if $rescale;
 
     my @points = map {
 	my ($start,$end,$score) = @$_;
+	$score     = ($score-$mean)/$stdev if $rescale;
 	my $x1     = $left    + ($start - $f_start) * $x_scale;
 	my $x2     = $left    + ($end   - $f_start) * $x_scale;
 	if ($x2 >= $left and $x1 <= $right) {
-	    my $y1     = $bottom  - ($score - $min_score) * $y_scale;
+	    my $y1     = $bottom  - ($score - $scaled_min) * $y_scale;
 	    my $y2     = $y_origin;
 	    $y1        = $top    if $y1 < $top;
 	    $y1        = $bottom if $y1 > $bottom;
@@ -261,11 +290,12 @@ sub draw_plot {
 	}
     } @$parts;
 
-    my $type           = $self->option('graph_type') || $self->option('graphtype') || 'boxes';
+    $self->panel->startGroup($gd);
+    my $type           = $self->graph_type;
     if ($type eq 'boxes') {
 	for (@points) {
 	    my ($x1,$y1,$x2,$y2,$color,$lw) = @$_;
-	    $self->filled_box($gd,$x1,$y1,$x2,$y2,$color,$color,$lw) if abs($y2-$y1) > 0;
+	    $gd->filledRectangle($x1,$y1,$x2,$y2,$color) if abs($y2-$y1) > 0;
 	}
     }
 
@@ -297,15 +327,25 @@ sub draw_plot {
 	for (@points) {
 	    my ($x1, $y1, $x2, $y2, $color, $lw)  = @$_;
 	    my ($y_start,$y_end) = $y1 < $y_origin ? ($y1,$y_origin) : ($y_origin,$y1);
-	    $self->filled_box($gd,$current->[0],$y_start,$x2,$y_end,$color,$color,1) if $y1-$y2;
-	    $current = $_;
+	    if ($y1-$y2) {
+		my $delta = abs($x2-$current->[0]);
+		$gd->filledRectangle($current->[0],$y_start,$x2,$y_end,$color) if $delta > 1;
+		$gd->line($current->[0],$y_start,$current->[0],$y_end,$color)  if $delta == 1;
+		$current = $_;
+	    }
 	}	
     }
 
     if ($self->option('variance_band') && 
 	(my ($mean,$variance) = $self->global_mean_and_variance())) {
-	my $y1             = $bottom - ($mean+$variance - $min_score) * $y_scale;
-	my $y2             = $bottom - ($mean-$variance - $min_score) * $y_scale;
+	if ($rescale) {
+	    $mean     = 0;
+	    $variance = 1;
+	}
+	my $y1             = $bottom - ($mean+$variance   - $scaled_min) * $y_scale;
+	my $y2             = $bottom - ($mean-$variance   - $scaled_min) * $y_scale;
+	my $yy1            = $bottom - ($mean+$variance*2 - $scaled_min) * $y_scale;
+	my $yy2            = $bottom - ($mean-$variance*2 - $scaled_min) * $y_scale;
 	my ($clip_top,$clip_bottom);
 	if ($y1 < $top) {
 	    $y1                = $top;
@@ -315,22 +355,30 @@ sub draw_plot {
 	    $y2                = $bottom;
 	    $clip_bottom++;
 	}
-	my $y              = $bottom - ($mean - $min_score) * $y_scale;
+	my $y              = $bottom - ($mean - $scaled_min) * $y_scale;
 	my $mean_color     = $self->panel->translate_color('yellow:0.80');
-	my $variance_color = $self->panel->translate_color('grey:0.30');
-	$gd->filledRectangle($left,$y1,$right,$y2,$variance_color);
+	my $onesd_color = $self->panel->translate_color('grey:0.30');
+	my $twosd_color = $self->panel->translate_color('grey:0.20');
+	$gd->filledRectangle($left,$y1,$right,$y2,$onesd_color);
+	$gd->filledRectangle($left,$yy1,$right,$yy2,$twosd_color);
 	$gd->line($left,$y,$right,$y,$mean_color);
 
+	my $side = $self->_determine_side();
 	my $fcolor=$self->panel->translate_color('grey:0.50');
 	my $font  = $self->font('gdTinyFont');
-	my $x1    = $left - length('+1sd') * $font->width;
-	my $x2    = $left - length('mn')   * $font->width;
-	$gd->string($font,$x1,$y1-$font->height/2,'+1sd',$fcolor) unless $clip_top;
-	$gd->string($font,$x1,$y2-$font->height/2,'-1sd',$fcolor) unless $clip_bottom;
-	$gd->string($font,$x2,$y -$font->height/2,'mn',  $variance_color);
+	my $x1    = $left - length('+2sd') * $font->width - ($side=~/left|three/ ? 15 : 0);
+	my $x2    = $left - length('mn')   * $font->width - ($side=~/left|three/ ? 15 : 0);
+	$gd->string($font,$x1,$yy1-$font->height/2,'+2sd',$fcolor) unless $clip_top;
+	$gd->string($font,$x1,$yy2-$font->height/2,'-2sd',$fcolor) unless $clip_bottom;
+	$gd->string($font,$x2,$y -$font->height/2,'mn',  $fcolor);
     }
+    $self->panel->endGroup($gd);
 
-    $self->draw_label(@_)       if $self->option('label');
+    $self->panel->startGroup($gd);
+    $self->_draw_scale($gd,$x_scale,$scaled_min,$scaled_max,$dx,$dy,$y_origin);
+    $self->panel->endGroup($gd);
+
+    $self->Bio::Graphics::Glyph::xyplot::draw_label(@_)       if $self->option('label');
     $self->draw_description(@_) if $self->option('description');
 
   $self->panel->endGroup($gd);
@@ -339,54 +387,8 @@ sub draw_plot {
 sub draw_label {
     my $self = shift;
     my ($gd,$left,$top,$partno,$total_parts) = @_;
-    return $self->SUPER::draw_label(@_) unless $self->option('variance_band');
-    return $self->SUPER::draw_label($gd,$left,$top,$partno,$total_parts);
-}
-
-sub global_mean_and_variance {
-    my $self = shift;
-    if (my $wig = $self->wig) {
-	return ($wig->mean,$wig->stdev);
-    } elsif ($self->feature->can('global_mean')) {
-	my $f = $self->feature;
-	return ($f->global_mean,$f->global_stdev);
-    }
-    return;
-}
-
-sub global_min_max {
-    my $self = shift;
-    if (my $wig = $self->wig) {
-	return ($wig->min,$wig->max);
-    } elsif (my $stats = eval {$self->feature->global_stats}) {
-	return ($stats->{minVal},$stats->{maxVal});
-    }
-    return;
-}
-
-sub wig {
-    my $self = shift;
-    my $d = $self->{wig};
-    $self->{wig} = shift if @_;
-    $d;
-}
-
-sub series_mean {
-    my $self = shift;
-    my ($mean) = $self->global_mean_and_variance;
-    return $mean;
-}
-
-sub series_min {
-    my $self = shift;
-    my $wig = $self->wig or return;
-    return eval {$wig->min} || undef;
-}
-
-sub series_max {
-    my $self = shift;
-    my $wig = $self->wig or return;
-    return eval {$wig->max} || undef;
+    return $self->Bio::Graphics::Glyph::xyplot::draw_label(@_) unless $self->option('variance_band');
+    return $self->Bio::Graphics::Glyph::xyplot::draw_label($gd,$left,$top,$partno,$total_parts);
 }
 
 
@@ -425,7 +427,6 @@ sub create_parts_for_dense_feature {
 
     my $span = $self->scale> 1 ? $end - $start : $self->width;
     my $data = $dense->values($start,$end,$span);
-    # warn join ' ',map{int($_+0.5)} @$data;
     my $points_per_span = ($end-$start+1)/$span;
     my @parts;
 

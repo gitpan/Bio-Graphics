@@ -98,11 +98,15 @@ sub pad_top {
 
 sub bump {
   my $self = shift;
-  return 1 # top level bumps, other levels don't unless specified in config
-    if $self->{level} == 0
+  my $bump;
+  if ($self->{level} == 0
       && lc $self->feature->primary_tag eq 'gene'
-      && eval {($self->subfeat($self->feature))[0]->type =~ /RNA|pseudogene/i};
-  return $self->SUPER::bump;
+      && eval {($self->subfeat($self->feature))[0]->type =~ /RNA|pseudogene/i}) {
+      $bump = 1;
+  } else {
+      $bump = $self->SUPER::bump;
+  }
+  return $bump;
 }
 
 sub label {
@@ -136,7 +140,7 @@ sub draw_connectors {
   my $self = shift;
   if ($self->feature->primary_tag eq 'gene') {
       my @parts = $self->parts;
-      return if @parts && $parts[0] =~ /rna|transcript|pseudogene/i;
+      return if @parts && $parts[0]->feature->primary_tag =~ /rna|transcript|pseudogene/i;
   }
   $self->SUPER::draw_connectors(@_);
 }

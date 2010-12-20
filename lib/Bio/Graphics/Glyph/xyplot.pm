@@ -3,12 +3,13 @@ package Bio::Graphics::Glyph::xyplot;
 use strict;
 #use GD 'gdTinyFont';
 
-use base qw(Bio::Graphics::Glyph::minmax);
+use base qw(Bio::Graphics::Glyph::segments Bio::Graphics::Glyph::minmax);
 use constant DEFAULT_POINT_RADIUS=>4;
 use Bio::Root::Version;
 our $VERSION = ${Bio::Root::Version::VERSION};
 
 use constant DEBUG=>0;
+use constant EXTRA_LABEL_PAD=>8;
 
 sub my_description { 
     return <<'END';
@@ -40,7 +41,7 @@ sub my_options {
 	     'range to be clipped.'
 	    ],
 	 graph_type => [
-	     'string',
+	     ['histogram','boxes','line','points','linepoints'],
 	     'histogram',
 	     'Type of graph to generate. Options are "histogram", "boxes",',
 	     '"line","points", or "linepoints".'
@@ -54,17 +55,17 @@ sub my_options {
 	 ],
 	 scale => [
 	     'string',
-	     'right',
+	     'three',
 	     'Position where the Y axis scale is drawn, if any.',
-	     'Options are one of "left", "right", "both" or "none".',
+	     'Options are one of "left", "right", "both", "three" or "none".',
+	     '"three" will cause the scale to be drawn in the left, right and center.',
 	 ],
 
 	 scale_color => [
 	     'color',
 	     'fgcolor',
 	     'Color of the X and Y scales. Defaults to the same as fgcolor.',
-	 ]
-	 
+	 ],
     };
 }
 
@@ -75,12 +76,19 @@ my %SYMBOLS = (
 	       point    => \&draw_point,
 	      );
 
+sub extra_label_pad {
+    return EXTRA_LABEL_PAD;
+}
+
 # Default pad_left is recursive through all parts. We certainly
 # don't want to do this for all parts in the graph.
 sub pad_left {
   my $self = shift;
   return 0 unless $self->level == 0;
-  return $self->SUPER::pad_left(@_);
+  my $left = $self->SUPER::pad_left(@_);
+  my $side = $self->_determine_side;
+  $left += $self->extra_label_pad if $self->label_position eq 'left' && $side =~ /left|both|three/;
+  return $left;
 }
 
 # Default pad_left is recursive through all parts. We certainly
@@ -120,7 +128,21 @@ sub scalecolor {
 
 sub default_scale
 {
-  return 'right';
+  return 'three';
+}
+
+sub record_label_positions { 
+    my $self = shift;
+    my $rlp  = $self->option('record_label_positions');
+    return $rlp if defined $rlp;
+    return 1;
+}
+
+sub graph_type {
+    my $self = shift;
+	$self->option('graph_type')       || 
+	$self->option('graphtype')        ||
+	'boxes';
 }
 
 sub draw {
@@ -173,12 +195,16 @@ sub draw {
   $self->throw("Invalid graph type '$type'") unless @draw_methods;
 
   $self->panel->startGroup($gd);
-  $self->_draw_scale($gd,$scale,$min_score,$max_score,$dx,$dy,$y_origin);
+  $self->_draw_grid($gd,$scale,$min_score,$max_score,$dx,$dy,$y_origin);
   $self->panel->endGroup($gd);
 
   for my $draw_method (@draw_methods) {
     $self->$draw_method($gd,$dx,$dy,$y_origin);
   }
+
+  $self->panel->startGroup($gd);
+  $self->_draw_scale($gd,$scale,$min_score,$max_score,$dx,$dy,$y_origin);
+  $self->panel->endGroup($gd);
 
   $self->draw_label(@_)       if $self->option('label');
   $self->draw_description(@_) if $self->option('description');
@@ -327,9 +353,9 @@ sub _draw_boxes {
     # prevent boxes from being less than 1 pixel
     $x2 = $x1+1 if $x2-$x1 < 1;
     if ($part->{_y_position} < $midpoint) {
-      $self->filled_box($gd,$x1,$part->{_y_position},$x2,$y_origin,$color,$color,$lw);
+	$gd->filledRectangle($x1,$part->{_y_position},$x2,$y_origin,$color);
     } else {
-      $self->filled_box($gd,$x1,$y_origin,$x2,$part->{_y_position},$negcolor,$negcolor,$lw);
+	$gd->filledRectangle($x1,$y_origin,$x2,$part->{_y_position},$negcolor);
     }
   }
 
@@ -407,8 +433,6 @@ sub _draw_scale {
   my ($gd,$scale,$min,$max,$dx,$dy,$y_origin) = @_;
   my ($x1,$y1,$x2,$y2) = $self->calculate_boundaries($dx,$dy);
 
-  # this is wrong
-  #  $y2 -= $self->pad_bottom - 1;
   my $crosses_origin = $min < 0 && $max > 0;
 
   my $side = $self->_determine_side();
@@ -416,10 +440,29 @@ sub _draw_scale {
   my $fg    = $self->scalecolor;
   my $font  = $self->font('gdTinyFont');
 
-  $gd->line($x1,$y1,$x1,$y2,$fg) if $side eq 'left'  || $side eq 'both';
-  $gd->line($x2,$y1,$x2,$y2,$fg) if $side eq 'right' || $side eq 'both';
+  my $middle = ($x1+$x2)/2;
 
-  $gd->line($x1,$y_origin,$x2,$y_origin,$fg);
+  # minor ticks - multiples of 10
+  my $y_scale = $self->minor_ticks($min,$max,$y1,$y2);
+
+  my $p  = $self->panel;
+  my $gc = $p->translate_color($p->gridcolor);
+  my $mgc= $p->translate_color($p->gridmajorcolor);
+
+  # if ($side ne 'none') {
+  #     for (my $y = $y2-$y_scale; $y > $y1; $y -= $y_scale) {
+  # 	  my $yr = int($y+0.5);
+  # 	  $gd->line($x1-1,$yr,$x2,$yr,$gc);
+  #     }
+  #     $gd->line($x1,$y1,$x2,$y1,$gc);
+  #     $gd->line($x1,$y2,$x2,$y2,$gc);
+  # }
+  
+  $gd->line($x1,$y1,$x1,$y2,$fg) if $side eq 'left'  || $side eq 'both' || $side eq 'three';
+  $gd->line($x2,$y1,$x2,$y2,$fg) if $side eq 'right' || $side eq 'both' || $side eq 'three';
+  $gd->line($middle,$y1,$middle,$y2,$fg) if $side eq 'three';
+
+  $gd->line($x1,$y_origin,$x2,$y_origin,$mgc);
 
   my @points = ([$y1,$max],[$y2,$min]);
   push @points,$crosses_origin ? [$y_origin,0] : [($y1+$y2)/2,($min+$max)/2];
@@ -427,43 +470,76 @@ sub _draw_scale {
   my $last_font_pos = -99999999999;
 
   for (sort {$a->[0]<=>$b->[0]} @points) {
-    $gd->line($x1-3,$_->[0],$x1,$_->[0],$fg) if $side eq 'left'  || $side eq 'both';
-    $gd->line($x2,$_->[0],$x2+3,$_->[0],$fg) if $side eq 'right' || $side eq 'both';
+    $gd->line($x1-3,$_->[0],$x1,$_->[0],$fg) if $side eq 'left'  || $side eq 'both' || $side eq 'three';
+    $gd->line($x2,$_->[0],$x2+3,$_->[0],$fg) if $side eq 'right' || $side eq 'both' || $side eq 'three';
+    $gd->line($middle,$_->[0],$middle+3,$_->[0],$fg) if $side eq 'three';
 
     my $font_pos = $_->[0]-($font->height/2);
     $font_pos-=2 if $_->[1] < 0;  # jog a little bit for neg sign
 
     next unless $font_pos > $last_font_pos + $font->height/2; # prevent labels from clashing
-    if ($side eq 'left' or $side eq 'both') {
+    if ($side eq 'left' or $side eq 'both' or $side eq 'three') {
       $gd->string($font,
 		  $x1 - $font->width * length($_->[1]) - 3,$font_pos,
 		  $_->[1],
 		  $fg);
     }
-    if ($side eq 'right' or $side eq 'both') {
+    if ($side eq 'right' or $side eq 'both' or $side eq 'three') {
       $gd->string($font,
 		  $x2 + 5,$font_pos,
+		  $_->[1],
+		  $fg);
+    }
+    if ($side eq 'three' && $_->[1] != 0) {
+      $gd->string($font,
+		  $middle + 5,$font_pos,
 		  $_->[1],
 		  $fg);
     }
     $last_font_pos = $font_pos;
   }
 
-  # minor ticks - multiples of 10
-  my $interval = 1;
-  my $height   = $y2-$y1;
-  my $y_scale  = 1;
-  if ($max > $min) {
-      while ($height/(($max-$min)/$interval) < 2) { $interval *= 10 }
-      $y_scale = $height/(($max-$min)/$interval);
-  }
-
   for (my $y = $y2-$y_scale; $y > $y1; $y -= $y_scale) {
       my $yr = int($y+0.5);
-      $gd->line($x1-1,$yr,$x1,$yr,$fg) if $side eq 'left'  || $side eq 'both';
-      $gd->line($x2,$yr,$x2+1,$yr,$fg) if $side eq 'right' || $side eq 'both';
+      $gd->line($x1-3,$yr,$x1,$yr,$fg) if $side eq 'left' or $side eq 'both' or $side eq 'three';
+      $gd->line($x2,$yr,$x2+3,$yr,$fg) if $side eq 'right' or $side eq 'both' or $side eq 'three';
+      $gd->line($middle-1,$yr,$middle+2,$yr,$fg) if $side eq 'three';
   }
-  
+
+
+}
+
+sub _draw_grid {
+    my $self = shift;
+    my ($gd,$scale,$min,$max,$dx,$dy,$y_origin) = @_;
+    my $side = $self->_determine_side();
+    return if $side eq 'none';
+
+    my ($x1,$y1,$x2,$y2) = $self->calculate_boundaries($dx,$dy);
+    my $p  = $self->panel;
+    my $gc = $p->translate_color($p->gridcolor);
+    my $y_scale = $self->minor_ticks($min,$max,$y1,$y2);
+
+    for (my $y = $y2-$y_scale; $y > $y1; $y -= $y_scale) {
+	my $yr = int($y+0.5);
+	$gd->line($x1-1,$yr,$x2,$yr,$gc);
+    }
+    $gd->line($x1,$y1,$x2,$y1,$gc);
+    $gd->line($x1,$y2,$x2,$y2,$gc);
+}
+
+sub minor_ticks {
+    my $self = shift;
+    my ($min,$max,$top,$bottom) = @_;
+
+    my $interval = 1;
+    my $height   = $bottom-$top;
+    my $y_scale  = 1;
+    if ($max > $min) {
+	while ($height/(($max-$min)/$interval) < 2) { $interval *= 10 }
+	$y_scale = $height/(($max-$min)/$interval);
+    }
+
 }
 
 # we are unbumpable!
@@ -553,6 +629,24 @@ sub keyglyph {
 sub symbols {
     my $self = shift;
     return \%SYMBOLS;
+}
+
+sub draw_label {
+  my $self = shift;
+  my ($gd,$left,$top,$partno,$total_parts) = @_;
+
+  my $label = $self->label or return;
+  return $self->SUPER::draw_label(@_) unless $self->label_position eq 'left';
+
+  my $font = $self->labelfont;
+  my $x = $self->left + $left - $font->width*length($label) - $self->extra_label_pad;
+  my $y = $self->{top} + $top;
+
+  $self->render_label($gd,
+		      $font,
+		      $x,
+		      $y,
+		      $label);
 }
 
 

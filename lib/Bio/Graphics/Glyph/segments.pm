@@ -71,6 +71,14 @@ sub my_options {
 	      'color',
 	      'lightgrey',
 	      'The color to use for indels when displaying alignments.'],
+	  insertion_color => [
+	      'color',
+	      'green',
+	      'The color to use for insertions when displaying alignments; overrides indel_color'],
+	  deletion_color => [
+	      'color',
+	      'red',
+	      'The color to use for deletions when displaying alignments; overrides indel_color'],
 	  mismatch_only => [
 	      'boolean',
 	      undef,
@@ -105,6 +113,22 @@ sub indel_color {
     my $self = shift;
     my $c    = $self->option('indel_color');
     return $self->mismatch_color unless $c;
+    return $self->translate_color($c);
+}
+
+sub insertion_color {
+    my $self = shift;
+    my $c    = $self->option('insertion_color');
+    $c     ||= $self->option('indel_color');
+    $c     ||= $self->my_options->{insertion_color}[1];
+    return $self->translate_color($c);
+}
+
+sub deletion_color {
+    my $self = shift;
+    my $c    = $self->option('deletion_color');
+    $c     ||= $self->option('indel_color');
+    $c     ||= $self->my_options->{deletion_color}[1];
     return $self->translate_color($c);
 }
 
@@ -341,14 +365,20 @@ sub draw_component {
     my ($gd,$left,$top,$partno,$total_parts) = @_;
     my ($x1,$y1,$x2,$y2) = $self->bounds($left,$top);
 
-    my ($strand,$draw_target);
+    my $draw_target;
+    my $strand   = $self->feature->strand;
+
     if ($self->draw_target && $self->dna_fits) {
 	$draw_target++;
 	my $stranded = $self->stranded;
-	$strand   = $self->feature->strand;
 	my $bgcolor  = $self->bgcolor;
-	$stranded ? $self->filled_arrow($gd,$strand,$x1-6,$y1,$x2+6,$y2)
-	          : $self->filled_box($gd,$x1,$y1,$x2,$y2,$bgcolor,$bgcolor);
+	if ($stranded) {
+	    $x1 -= 6 if $strand < 0 && $x1 >= $self->panel->left;
+	    $x2 += 6 if $strand > 0 && $x2 <= $self->panel->right;
+	    $self->filled_arrow($gd,$strand,$x1,$y1,$x2,$y2)
+	} else {
+	    $self->filled_box($gd,$x1,$y1,$x2,$y2,$bgcolor,$bgcolor);
+	}
     } else {
 	$self->SUPER::draw_component(@_);
     }
@@ -356,8 +386,9 @@ sub draw_component {
     return unless $self->show_mismatch;
     my $mismatch_color = $self->mismatch_color;
     my $feature = $self->feature;
-    my $start = $self->feature->start;
-    my (@mismatch_positions,@indel_positions);
+    my $start   = $self->feature->start;
+    my $end     = $feature->end;
+    my (@mismatch_positions,@del_positions,@in_positions);
 
     if (my ($src,$matchstr,$tgt) = eval{$feature->padded_alignment}) {
 	my @src   = split '',$src;
@@ -365,18 +396,22 @@ sub draw_component {
 	my @tgt   = split '',$tgt;
 	my $pos   = $start;
 
-	# skip over src padding
+	# skip over src padding (probably soft clipped)
 	while ($src[0] eq '-') { 
 	    shift @src; 
 	    shift @tgt; 
 	}
+	while ($src[-1] eq '-') {
+	    pop @src;
+	    pop @tgt;
+	}
 
 	for (my $i=0;$i<@src;$i++) {
 	    if ($src[$i] eq '-') {
-		push @indel_positions,$pos;
+		push @in_positions,$pos;
 	    }
 	    elsif ($tgt[$i] eq '-') {
-		push @indel_positions,$pos;
+		push @del_positions,$pos;
 		$pos++;
 	    } elsif ($src[$i] ne $tgt[$i]) {
 		push @mismatch_positions,$pos;
@@ -398,7 +433,9 @@ sub draw_component {
 	my @tgt = split '',$tdna;
 	for (my $i=0;$i<@src;$i++) {
 	    next if $src[$i] eq $tgt[$i];
-	    push @mismatch_positions,$i+$start;
+	    warn "$src[$i] eq $tgt[$i], strand=$strand";
+	    my $pos = $strand >= 0 ? $i+$start : $end-$i;
+	    push @mismatch_positions,$pos;
 	}
     }
 
@@ -406,28 +443,32 @@ sub draw_component {
     my $panel_right          = $self->panel->right;
     
     for my $a ([\@mismatch_positions,$self->mismatch_color],
-	       [\@indel_positions,$self->indel_color]) {
+	       [\@del_positions,$self->deletion_color],
+	       [\@in_positions,$self->insertion_color,0.5,0.5]
+	) {
 
-	my @pixel_positions = $self->map_no_trunc(@{$a->[0]});
 	my $color            = $a->[1];
+	my $offset           = $a->[2]||0;
+	my $width            = $a->[3]||1;
+	my @pixel_positions = $self->map_no_trunc(@{$a->[0]});
 
 	foreach (@pixel_positions) {
 	    next if $_ < $x1;
 	    next if $_ > $x2;
 	    next if $_ >= $panel_right;
-	    my $left  = $_;
-	    my $right = $left+$pixels_per_base;
+	    my $left  = $_ - $pixels_per_base*$offset;
+	    my $right = $left+($width*$pixels_per_base);
 	    my $top   = $y1+1;
 	    my $bottom= $y2-1;
 	    my $middle= ($y1+$y2)/2;
-	    if ($self->stranded && $left<=$x1 && $self->strand < 0) {
+	    if ($self->stranded && $left <= $x1+$pixels_per_base-1 && $self->strand < 0) {
 		$self->filled_arrow($gd,$self->strand,
 				    $draw_target ? ($left-4):$left+2,
 				    $top,
 				    $draw_target ? $right:$right+5,$bottom,$color,$color,1);
 	    } elsif ($self->stranded && $right >= $x2-$pixels_per_base+1 && $self->strand > 0) {
 		$self->filled_arrow($gd,$self->strand,
-				    $left,$top,$draw_target ? ($right+4): $right-2,$bottom,$mismatch_color,$mismatch_color,1);
+				    $left,$top,$draw_target ? ($right+4): $right-2,$bottom,$color,$color,1);
 	    } else {
 		$self->filled_box($gd,
 				  $left,
@@ -456,6 +497,7 @@ sub draw_multiple_alignment {
 
   my $pixels_per_base      = $self->scale;
   my $feature              = $self->feature;
+
   my $panel                = $self->panel;
   my ($abs_start,$abs_end)     = ($feature->start,$feature->end);
   my ($tgt_start,$tgt_end)     = ($feature->hit->start,$feature->hit->end);
@@ -504,7 +546,7 @@ sub draw_multiple_alignment {
 
     my $target = $s->hit;
     my ($src_start,$src_end) = ($s->start,$s->end);
-    next unless $src_start <= $panel_end && $src_end >= $panel_start;
+#    next unless $src_start <= $panel_end && $src_end >= $panel_start;
 
     my ($tgt_start,$tgt_end) = ($target->start,$target->end);
 
@@ -650,7 +692,9 @@ sub draw_multiple_alignment {
   }
 
   # remove segments that got clipped out of existence
-  @segments = grep { $_->[SRC_START]<=$_->[SRC_END] } @segments;
+  # no longer doing this because it interferes with ability to
+  # detect insertions in the target
+#  @segments = grep { $_->[SRC_START]<=$_->[SRC_END] } @segments;
 
   # relativize coordinates
   if ($strand < 0) {
@@ -667,20 +711,26 @@ sub draw_multiple_alignment {
   my $fontwidth  = $font->width;
 
   my $mismatch = $self->mismatch_color;
-  my $indel    = $self->indel_color;
+  my $insertion= $self->insertion_color;
+  my $deletion = $self->deletion_color;
   my $grey     = $self->translate_color('gray');
   my $mismatch_font_color = eval {
       my ($r,$g,$b) = $self->panel->rgb($mismatch);
       $self->translate_color(($r+$g+$b)>128 ? 'black' : 'white');
   };
-  my $indel_font_color = eval {
-      my ($r,$g,$b) = $self->panel->rgb($indel);
+  my $insertion_font_color = eval {
+      my ($r,$g,$b) = $self->panel->rgb($insertion);
+      $self->translate_color(($r+$g+$b)>128 ? 'black' : 'white');
+  };
+  my $deletion_font_color = eval {
+      my ($r,$g,$b) = $self->panel->rgb($deletion);
       $self->translate_color(($r+$g+$b)>128 ? 'black' : 'white');
   };
 
+
   unless (@segments) { # this will happen if entire region is a target gap
       for (my $i = $bl;$i<$br-$self->scale;$i+=$self->scale) {
-	  $gd->char($font,$self->flip ? $i+$self->scale-4 : $i+2,$top,'-',$indel_font_color);
+	  $gd->char($font,$self->flip ? $i+$self->scale-4 : $i+2,$top,'-',$deletion_font_color);
       }
       return;
   }
@@ -691,8 +741,6 @@ sub draw_multiple_alignment {
     $seg->[TGT_START] -= $tgt_start - 1;
     $seg->[TGT_END]   -= $tgt_start - 1;
 
-    warn "src segment = $seg->[SRC_START]", "..",$seg->[SRC_END] if DEBUG;
-    warn "tgt segment = $seg->[TGT_START]", "..",$seg->[TGT_END] if DEBUG;
     if ($strand < 0) {
       ($seg->[TGT_START],$seg->[TGT_END]) = (length($tgt_dna)-$seg->[TGT_END]+1,length($tgt_dna)-$seg->[TGT_START]+1);
     }
@@ -717,7 +765,10 @@ sub draw_multiple_alignment {
       };
 
   my $mismatch_only = $self->mismatch_only;
-  my ($tgt_last_end,$src_last_end,$leftmost,$rightmost);
+  my ($tgt_last_end,$src_last_end,$leftmost,$rightmost,$gaps);
+
+  my $segment = 0;
+
   for my $seg (sort {$a->[SRC_START]<=>$b->[SRC_START]} @segments) {
     my $y = $top-1;
     my $end = $seg->[SRC_END]-$seg->[SRC_START];
@@ -741,80 +792,54 @@ sub draw_multiple_alignment {
       $drew_sequence++;
     }
 
+    # deal with gaps in the alignment
+    if (defined $src_last_end && (my $delta = $seg->[SRC_START] - $src_last_end) > 1) {
+	for (my $i=0;$i<$delta-1;$i++) {
+	    my $x = $base2pixel->($src_last_end,$i+1);
+	    next if $x > $panel_right;
+	    next if $x < $panel_left;
+	    $gd->char($font,$x,$y,'-',$deletion_font_color);
+	}
+	$gaps = $delta-1;
+    }
+
     # indicate the presence of insertions in the target
-    if (defined $tgt_last_end) {
-      my $delta     = $seg->[TGT_START] - $tgt_last_end;
-      my $src_delta = $seg->[SRC_START] - $src_last_end;
-      if ($delta > 1 and $src_delta > 0) {  # an insertion in the target relative to the source
-	my $gap_left  = $fontwidth + $base2pixel->($src_last_end,0);
+    $gaps       ||= 0;
+    my $pos       = $src_last_end + $gaps;
+    my $delta     = $seg->[TGT_START] - $tgt_last_end;
+    my $src_delta = $seg->[SRC_START] - $src_last_end;
+
+    if ($segment && $delta && ($delta > $src_delta-$gaps)) {  # an insertion in the target relative to the source
+	my $gap_left  = $base2pixel->($pos+0.5,0);
 	my $gap_right = $base2pixel->($seg->[SRC_START],0);
 	($gap_left,$gap_right) = ($gap_right+$fontwidth,$gap_left-$fontwidth) if $self->flip;
 	warn "delta=$delta, gap_left=$gap_left, gap_right=$gap_right" if DEBUG;
 
-	if ($delta == $src_delta) {
-	  $gap_left  += $pixels_per_base/2-2;
-	  $gap_right -= $pixels_per_base/2-2;
-	}
-
 	next if $gap_left <= $panel_left || $gap_right >= $panel_right;
+	    
+	my $length = $delta-1;
+	$length    = 1 if $length <= 0;  # workaround
+	my $gap_distance   = $gap_right - $gap_left;
+	my $pixels_per_inserted_base = $gap_distance/$length;
 
-	$self->filled_box($gd,$gap_left,$y+1,
-			      $gap_right-2,$y+$lineheight,$indel,$indel) if
-				$show_mismatch && $gap_left >= $panel_left && $gap_right <= $panel_right;
-
-
-	my $gap_distance             = $gap_right - $gap_left + 1;
-	my $pixels_per_inserted_base = $gap_distance/($delta-1);
-
- 	if ($pixels_per_inserted_base >= $fontwidth) {  # Squeeze the insertion in
- 	  for (my $i = 0; $i<$delta-1; $i++) {
- 	    my $x = $gap_left + ($pixels_per_inserted_base-$fontwidth)/2 + $pixels_per_inserted_base * $i;
- 	    my $bp = $self->_subsequence($tgt_dna,$tgt_last_end+$i+1,$tgt_last_end+$i+1);
-	    next if $x < $panel_left;
- 	    $gd->char($font,$x,$y,$bp,$color);
- 	  }
+	if ($pixels_per_inserted_base >= $fontwidth) {  # Squeeze the insertion in
+	    for (my $i = 0; $i<$delta-1; $i++) {
+		my $x = $gap_left + $pixels_per_inserted_base * $i;
+		my $bp = $self->_subsequence($tgt_dna,$tgt_last_end+$i+1,$tgt_last_end+$i+1);
+		next if $x < $panel_left;
+		$gd->char($font,$x,$y,$bp,$color);
+	    }
 	} else {  #here's where we insert the insertion length
-	    my $length = $delta-1;
 	    if ($gap_distance >= $fontwidth*length($length)) {
-		my $center = $gap_left + $gap_distance/2 - ($fontwidth*length($length))/2;
-		$gd->string($font,$center,$y,$length,$color);
+		$gd->string($font,$gap_left,$y,$length,$color);
 	    }
 	}
-      }
-      # deal with gaps in the alignment
-      elsif ( (my $delta = $seg->[SRC_START] - $src_last_end) > 1) {
-	for (my $i=0;$i<$delta-1;$i++) {
-	  my $x = $base2pixel->($src_last_end,$i+1);
-	  next if $x > $panel_right;
-	  $self->filled_box($gd,$x-$pixels_per_base/2,$y+1,$x+$pixels_per_base/2,$y+$lineheight,$indel,$indel)
-	    if $show_mismatch;
-	  $gd->char($font,$x,$y,'-',$indel_font_color);
-	}
-	
-      }
-
     }
 
+  } continue {
     $tgt_last_end  = $seg->[TGT_END];
     $src_last_end  = $seg->[SRC_END];
-  }
-
-  # additional fixup -- insert dashes at beginnings and ends of the segments, if they don't span the full
-  # alignment for some reason - THIS SHOULD NOT BE NECESSARY AND INDICATES THAT THIS WHOLE METHOD NEEDS
-  # TO BE REWRITTEN!
-  if (defined $leftmost && $leftmost-$bl > $pixels_per_base) {
-      for (map {$bl+$_*$pixels_per_base} 0..($leftmost-$bl)/$pixels_per_base-1) {
-	  $self->filled_box($gd,$_,$top+1,$_+$pixels_per_base,$top+$lineheight-1,$indel,$indel)
-	    if $show_mismatch;
-	  $gd->char($font,$_+2,$top-1,'-',$color);
-      }
-  }
-  if (defined $rightmost && $br-$rightmost > $pixels_per_base) {
-      for (map {$rightmost+$_*$pixels_per_base} (0..($br-$rightmost)/$pixels_per_base)) {
-	  $self->filled_box($gd,$_,$top+1,$_+$pixels_per_base,$top+$lineheight-1,$indel,$indel)
-	      if $show_mismatch;
-	  $gd->char($font,$_+2,$top-1,'-',$color);
-      }
+    $segment++;
   }
 
   return $drew_sequence;
@@ -1052,6 +1077,11 @@ In addition, the following glyph-specific options are recognized:
   -show_mismatch When combined with -draw_target,     0 (false)
                  highlights mismatched bases in
                  the mismatch color.  
+                 Can be 0 (don't display);
+                 1 (display when the DNA fits);
+                 or another positive integer
+                 (display when the region in
+                 view is <= this value).
                  See "Displaying Alignments".
 
   -mismatch_only When combined with -draw_target,     0 (false)
@@ -1062,7 +1092,15 @@ In addition, the following glyph-specific options are recognized:
 
   -mismatch_color The mismatch color to use           'lightgrey'
 
-  -indel_color   The color to use for small indels.   'lightgrey'
+  -insertion_color The color to use for insertions    'green'
+                   relative to the reference.          
+
+  -deletion_color The color to use for deletions      'red'
+                  relative to the reference.
+
+  -indel_color   The color to use for indels, used   'lightgrey'
+                 only if -insertion_color or
+                 -deletion_color are absent
 
   -true_target   Show the target DNA in its native    0 (false)
                  (plus strand) orientation, even if
@@ -1087,7 +1125,10 @@ cause the alignment to be extended at the extreme ends by the
 indicated number of bases, and is useful for looking for polyAs and
 cloning sites at the ends of ESTs and cDNAs. -show_mismatch will cause
 mismatched bases to be highlighted in with the color indicated by
--mismatch_color (default lightgray).
+-mismatch_color. A -show_mismatch value of "1" will highlight mismatches
+only when the base pairs are displayed. A positive integer will cause
+mismatches to be shown whenever the region in view is less than or equal
+to the requested value.
 
 At high magnifications, minus strand matches will automatically be
 shown as their reverse complement (so that the match has the same
