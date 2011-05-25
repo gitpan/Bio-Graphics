@@ -13,7 +13,7 @@ name: Bio-Graphics
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.21
+    version: 2.23
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
   Bio::Graphics::DrawTransmembrane:
@@ -109,6 +109,8 @@ provides:
     file: lib/Bio/Graphics/Glyph/merged_alignment.pm
   Bio::Graphics::Glyph::minmax:
     file: lib/Bio/Graphics/Glyph/minmax.pm
+  Bio::Graphics::Glyph::operon:
+    file: lib/Bio/Graphics/Glyph/operon.pm
   Bio::Graphics::Glyph::oval:
     file: lib/Bio/Graphics/Glyph/oval.pm
   Bio::Graphics::Glyph::pairplot:
@@ -209,6 +211,8 @@ provides:
     file: lib/Bio/Graphics/Layout.pm
   Bio::Graphics::Layout::Contour:
     file: lib/Bio/Graphics/Layout.pm
+  Bio::Graphics::Math:
+    file: lib/Bio/Graphics/Layout.pm
   Bio::Graphics::Panel:
     file: lib/Bio/Graphics/Panel.pm
   Bio::Graphics::Pictogram:
@@ -222,8 +226,6 @@ provides:
     version: 1.0
   Bio::Graphics::Wiggle::Loader:
     file: lib/Bio/Graphics/Wiggle/Loader.pm
-  Math:
-    file: lib/Bio/Graphics/Layout.pm
 recommends:
   Bio::SCF: 1.01
   GD::SVG: 0.32
@@ -234,4 +236,4 @@ requires:
   Statistics::Descriptive: 2.6
 resources:
   license: http://dev.perl.org/licenses/
-version: 2.21
+version: 2.23
