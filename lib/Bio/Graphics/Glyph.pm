@@ -1,7 +1,5 @@
 package Bio::Graphics::Glyph;
 
-# $Id: Glyph.pm,v 1.14 2009-08-26 21:59:24 lstein Exp $
-
 use strict;
 use Carp 'croak','cluck';
 use constant BUMP_SPACING => 2; # vertical distance between bumped glyphs
@@ -481,6 +479,7 @@ sub bounds {
   my $self = shift;
   my ($dx,$dy) = @_;
   $dx += 0; $dy += 0;
+
   ($dx + $self->{left},
    $dy + $self->top    + $self->pad_top,
    $dx + $self->{left} + $self->{width} - 1,
@@ -682,7 +681,7 @@ sub fgcolor {
   $index = 'black' unless defined $index;
 
   if ($index eq 'featureRGB') {
-      ($index) = $self->feature->get_tag_values('RGB');
+      ($index) = eval{$self->feature->get_tag_values('RGB')};
       $index ||= $fgcolor;
   } elsif ($index eq 'featureScore') {
       $index = $self->score_to_color;
@@ -700,14 +699,13 @@ sub fillcolor {
 # we also look for the "fillcolor" option for Ace::Graphics compatibility
 sub bgcolor {
   my $self = shift;
-  my $bgcolor;
-  ($bgcolor) = $self->feature->get_tag_values('bgcolor') if $self->feature->has_tag('bgcolor'); 
+  my ($bgcolor) = eval{$self->feature->get_tag_values('bgcolor')};
   $bgcolor    ||= $self->option('bgcolor'); # Let feature attribute override color
   my $index     = defined $bgcolor ? $bgcolor : $self->option('fillcolor');
   $index        = 'white' unless defined $index;
 
   if ($index eq 'featureRGB') {
-      ($index) = $self->feature->get_tag_values('RGB');
+      ($index) = eval{$self->feature->get_tag_values('RGB')};
       $index ||= $bgcolor;
   } elsif ($index eq 'featureScore') {
       $index = $self->score_to_color;
@@ -721,9 +719,8 @@ sub score_to_color {
     my $self = shift;
     my $feature   = $self->feature;
 
-    my ($score)   = $feature->can('score') 
-                  ? $feature->score
-                  : $feature->get_tag_values('score');
+    my ($score)   = $feature->can('score')     ? $feature->score
+	          : eval{$feature->has_tag('score')} || 0;
 
     my $max_score = 945;  # defined by UCSC docs
     my $min_score = 166;
@@ -833,7 +830,7 @@ sub layout_sort {
 sub layout {
   my $self = shift;
   return $self->{layout_height} if exists $self->{layout_height};
-
+  
   my @parts = $self->parts;
   return $self->{layout_height} = 
       $self->height + $self->pad_top + $self->pad_bottom unless @parts;
@@ -848,8 +845,8 @@ sub layout {
 
   $_->layout foreach @parts;  # recursively lay out
 
-  # no bumping requested, or only one part here
-  if (@parts == 1 || !$bump_direction) {
+  # no bumping requested, or only one part here, or the tracks are supposed to be overlay
+  if (@parts == 1 || !$bump_direction || ($bump_direction eq 'fast' and $self->code_option('overlay') == 1)) {
     my $highest = 0;
     foreach (@parts) {
       my $height = $_->layout_height;
@@ -862,7 +859,6 @@ sub layout {
       return $self->{layout_height} = $self->optimized_layout(\@parts)
 	  + $self->pad_bottom + $self->pad_top -1;# - $self->top  + 1;
   }
-
   my (%bin1,%bin2);
   my $limit          = 0;
   my $recent_pos     = 0;
@@ -914,6 +910,7 @@ sub layout {
     }
     
     $g->move(0,$pos);
+
     $self->add_collision(\%bin1,CM1,CM2,$left,$g->top,$right,$g->bottom);
     
     $recent_pos = $pos;

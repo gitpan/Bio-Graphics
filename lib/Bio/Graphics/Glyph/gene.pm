@@ -1,7 +1,5 @@
 package Bio::Graphics::Glyph::gene;
 
-# $Id: gene.pm,v 1.3 2009-03-23 17:24:14 lstein Exp $
-
 use strict;
 use base 'Bio::Graphics::Glyph::processed_transcript';
 
@@ -102,7 +100,7 @@ sub bump {
   if ($self->{level} == 0
       && lc $self->feature->primary_tag eq 'gene'
       && eval {($self->subfeat($self->feature))[0]->type =~ /RNA|pseudogene/i}) {
-      $bump = 1;
+      $bump = $self->option('bump');
   } else {
       $bump = $self->SUPER::bump;
   }

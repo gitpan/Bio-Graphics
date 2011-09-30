@@ -2,7 +2,7 @@ package Bio::Graphics;
 
 use strict;
 use Bio::Graphics::Panel;
-our $VERSION = '2.24';
+our $VERSION = '2.25';
 
 1;
 
@@ -24,6 +24,7 @@ Bio::Graphics - Generate GD images of Bio::Seq objects
 
  use strict;
  use Bio::Graphics;
+ use Bio::SeqFeature::Generic;
  use Bio::SeqIO;
 
  my $file = shift                       or die "provide a sequence file as the argument";
