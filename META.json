@@ -35,7 +35,7 @@
    "provides" : {
       "Bio::Graphics" : {
          "file" : "lib/Bio/Graphics.pm",
-         "version" : "2.25"
+         "version" : "2.26"
       },
       "Bio::Graphics::ConfiguratorI" : {
          "file" : "lib/Bio/Graphics/ConfiguratorI.pm",
@@ -297,6 +297,10 @@
          "file" : "lib/Bio/Graphics/Glyph/saw_teeth.pm",
          "version" : 0
       },
+      "Bio::Graphics::Glyph::scale" : {
+         "file" : "lib/Bio/Graphics/Glyph/scale.pm",
+         "version" : 0
+      },
       "Bio::Graphics::Glyph::segmented_keyglyph" : {
          "file" : "lib/Bio/Graphics/Glyph/segmented_keyglyph.pm",
          "version" : 0
@@ -397,12 +401,12 @@
          "file" : "lib/Bio/Graphics/Glyph/wiggle_box.pm",
          "version" : 0
       },
-      "Bio::Graphics::Glyph::wiggle_density" : {
-         "file" : "lib/Bio/Graphics/Glyph/wiggle_density.pm",
+      "Bio::Graphics::Glyph::wiggle_data" : {
+         "file" : "lib/Bio/Graphics/Glyph/wiggle_data.pm",
          "version" : 0
       },
-      "Bio::Graphics::Glyph::wiggle_minmax" : {
-         "file" : "lib/Bio/Graphics/Glyph/wiggle_minmax.pm",
+      "Bio::Graphics::Glyph::wiggle_density" : {
+         "file" : "lib/Bio/Graphics/Glyph/wiggle_density.pm",
          "version" : 0
       },
       "Bio::Graphics::Glyph::wiggle_whiskers" : {
@@ -460,5 +464,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "2.25"
+   "version" : "2.26"
 }

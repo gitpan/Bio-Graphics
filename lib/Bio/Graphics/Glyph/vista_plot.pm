@@ -1,7 +1,7 @@
 package Bio::Graphics::Glyph::vista_plot;
 
 use strict;
-use base qw(Bio::Graphics::Glyph::wiggle_minmax
+use base qw(Bio::Graphics::Glyph::wiggle_data
             Bio::Graphics::Glyph::wiggle_xyplot 
             Bio::Graphics::Glyph::wiggle_density
             Bio::Graphics::Glyph::wiggle_whiskers
@@ -46,8 +46,8 @@ sub my_options {
             'vista',
             "What to show, peaks or signal, both (vista plot) or density graph."],
         graph_type => [
-	     ['whiskers','histogram','boxes','line','points','linepoints'],
-            'boxes',
+	     ['whiskers','histogram','line','points','linepoints'],
+            'histogram',
             "Type of signal graph to show."],
 	alpha  => [
 	    'integer',
@@ -158,13 +158,15 @@ sub draw {
 		    peak => (eval{$feature->get_tag_values('peak_type')})[0],
 		    fasta=> (eval{$feature->get_tag_values('fasta')})[0]);
     $self->panel->startGroup($gd);
+    $self->configure(opacity => 0.5)             if $only_show eq 'vista';
     $self->draw_signal($only_show,\%features,@_) if $only_show =~ /signal|density|vista/;
-    $self->draw_peaks(\%features,@_)             if $features{peak} && $only_show =~ /peaks|vista|both/;
+    $self->draw_peaks(\%features,@_)             if $features{peak} && $only_show =~ /peaks|vista/;
     $self->Bio::Graphics::Glyph::xyplot::draw_label(@_)       if $self->option('label');
     $self->draw_description(@_) if $self->option('description');
     $self->panel->endGroup($gd);
 }
 
+# this should be refactored from wiggle_xyplot and wiggle_density
 sub draw_signal {
     my $self        = shift;
     my $signal_type = shift;
@@ -176,8 +178,8 @@ sub draw_signal {
     if ($paths->{wig} && $paths->{wig}=~/\.wi\w{1,3}$/) {
 	eval "require Bio::Graphics::Wiggle" unless Bio::Graphics::Wiggle->can('new');
 	my $wig = eval { Bio::Graphics::Wiggle->new($paths->{wig}) };
-	$self->wig($paths->{wig});
-	$self->draw_wigfile($feature,$self->wig($wig),@_);
+	$self->wig($wig);
+	$self->_draw_wigfile($feature,$wig,@_);
     } elsif ($paths->{wig} && $paths->{wig}=~/\.bw$/i) { 
 	eval "use Bio::DB::BigWig 'binMean'" unless Bio::DB::BigWig->can('new');
 	my @args = (-bigwig => "$paths->{wig}");
@@ -188,6 +190,7 @@ sub draw_signal {
 	    push @args,(-fasta  => $fasta_accessor);
 	}
 	my $bigwig = Bio::DB::BigWig->new(@args);
+	$self->wig($bigwig);
 	my ($summary) = $bigwig->features(-seq_id => $feature->segment->ref,
 					  -start  => $self->panel->start,
 					  -end    => $self->panel->end,
@@ -203,7 +206,7 @@ sub draw_signal {
 	    if ($signal_type eq 'density') {
               $self->Bio::Graphics::Glyph::wiggle_density::draw_coverage($summary,\@vals,@_);
             } else {
-	      $self->Bio::Graphics::Glyph::wiggle_xyplot::draw_coverage($summary,\@vals,@_);
+	      $self->Bio::Graphics::Glyph::wiggle_data::_draw_coverage($summary,\@vals,@_);
             }
 	}
     }
@@ -235,6 +238,8 @@ sub draw_peaks {
 	$grad_ok = $self->calculate_gradient($min_s,$max_s);
     }
 
+    my $flip     = $self->{flip};
+
     foreach my $peak (@peaks) {
 	my $x1     = $left    + ($peak->{start} - $f_start) * $x_scale;
 	my $x2     = $left    + ($peak->{stop}  - $f_start) * $x_scale;
@@ -259,9 +264,15 @@ sub draw_peaks {
 
 	    my $bgcolor = $self->bgcolor;
 		
-	    if($alpha_c > 0){
+	    if ($alpha_c > 0){
 		$gd->alphaBlending(1);
 		$bgcolor = $self->add_alpha($gd,$bgcolor,$alpha_c);
+	    }
+
+	    if ($flip) {
+		$x1 = $right - ($x1-$left);
+		$x2 = $right - ($x2-$left);
+		($x1,$x2) = ($x2,$x1);
 	    }
 	    
 	    $self->filled_box($gd,int($x1+0.5),int($y1+0.5),int($x2+0.5),int($y2+0.5),$bgcolor,$bgcolor,0.5) if abs($y2-$y1) > 0;

@@ -15,7 +15,7 @@ name: Bio-Graphics
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.25
+    version: 2.26
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
     version: 0
@@ -211,6 +211,9 @@ provides:
   Bio::Graphics::Glyph::saw_teeth:
     file: lib/Bio/Graphics/Glyph/saw_teeth.pm
     version: 0
+  Bio::Graphics::Glyph::scale:
+    file: lib/Bio/Graphics/Glyph/scale.pm
+    version: 0
   Bio::Graphics::Glyph::segmented_keyglyph:
     file: lib/Bio/Graphics/Glyph/segmented_keyglyph.pm
     version: 0
@@ -286,11 +289,11 @@ provides:
   Bio::Graphics::Glyph::wiggle_box:
     file: lib/Bio/Graphics/Glyph/wiggle_box.pm
     version: 0
+  Bio::Graphics::Glyph::wiggle_data:
+    file: lib/Bio/Graphics/Glyph/wiggle_data.pm
+    version: 0
   Bio::Graphics::Glyph::wiggle_density:
     file: lib/Bio/Graphics/Glyph/wiggle_density.pm
-    version: 0
-  Bio::Graphics::Glyph::wiggle_minmax:
-    file: lib/Bio/Graphics/Glyph/wiggle_minmax.pm
     version: 0
   Bio::Graphics::Glyph::wiggle_whiskers:
     file: lib/Bio/Graphics/Glyph/wiggle_whiskers.pm
@@ -338,4 +341,4 @@ requires:
   Statistics::Descriptive: 2.6
 resources:
   license: http://dev.perl.org/licenses/
-version: 2.25
+version: 2.26
