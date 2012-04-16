@@ -35,7 +35,7 @@
    "provides" : {
       "Bio::Graphics" : {
          "file" : "lib/Bio/Graphics.pm",
-         "version" : "2.26"
+         "version" : "2.28"
       },
       "Bio::Graphics::ConfiguratorI" : {
          "file" : "lib/Bio/Graphics/ConfiguratorI.pm",
@@ -247,6 +247,10 @@
       },
       "Bio::Graphics::Glyph::pinsertion" : {
          "file" : "lib/Bio/Graphics/Glyph/pinsertion.pm",
+         "version" : 0
+      },
+      "Bio::Graphics::Glyph::point_glyph" : {
+         "file" : "lib/Bio/Graphics/Glyph/point_glyph.pm",
          "version" : 0
       },
       "Bio::Graphics::Glyph::primers" : {
@@ -464,5 +468,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "2.26"
+   "version" : "2.28"
 }
