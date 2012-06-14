@@ -35,7 +35,7 @@
    "provides" : {
       "Bio::Graphics" : {
          "file" : "lib/Bio/Graphics.pm",
-         "version" : "2.28"
+         "version" : "2.29"
       },
       "Bio::Graphics::ConfiguratorI" : {
          "file" : "lib/Bio/Graphics/ConfiguratorI.pm",
@@ -468,5 +468,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "2.28"
+   "version" : "2.29"
 }
