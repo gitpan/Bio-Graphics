@@ -6,7 +6,7 @@ build_requires: {}
 configure_requires:
   Module::Build: 0.38
 dynamic_config: 1
-generated_by: 'Module::Build version 0.38, CPAN::Meta::Converter version 2.112150'
+generated_by: 'Module::Build version 0.38, CPAN::Meta::Converter version 2.110440'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -15,7 +15,7 @@ name: Bio-Graphics
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.29
+    version: 2.31
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
     version: 0
@@ -99,6 +99,9 @@ provides:
     version: 0
   Bio::Graphics::Glyph::extending_arrow:
     file: lib/Bio/Graphics/Glyph/extending_arrow.pm
+    version: 0
+  Bio::Graphics::Glyph::fb_shmiggle:
+    file: lib/Bio/Graphics/Glyph/fb_shmiggle.pm
     version: 0
   Bio::Graphics::Glyph::fixedwidth:
     file: lib/Bio/Graphics/Glyph/fixedwidth.pm
@@ -344,4 +347,4 @@ requires:
   Statistics::Descriptive: 2.6
 resources:
   license: http://dev.perl.org/licenses/
-version: 2.29
+version: 2.31

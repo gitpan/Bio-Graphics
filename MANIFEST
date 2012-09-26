@@ -34,6 +34,7 @@ lib/Bio/Graphics/Glyph/ellipse.pm
 lib/Bio/Graphics/Glyph/ex.pm
 lib/Bio/Graphics/Glyph/extending_arrow.pm
 lib/Bio/Graphics/Glyph/Factory.pm
+lib/Bio/Graphics/Glyph/fb_shmiggle.pm
 lib/Bio/Graphics/Glyph/fixedwidth.pm
 lib/Bio/Graphics/Glyph/flag.pm
 lib/Bio/Graphics/Glyph/gene.pm
@@ -121,12 +122,11 @@ scripts/contig_draw.pl
 scripts/feature_draw.pl
 scripts/frend.pl
 scripts/glyph_help.pl
+scripts/index_cov_files.pl
 scripts/render_msa.pl
 scripts/search_overview.pl
 t/BioGraphics.t
 t/data/feature_data.txt
-t/data/t1.gif
-t/data/t1.png
 t/data/t1/version1.gif
 t/data/t1/version1.png
 t/data/t1/version10.png
@@ -147,8 +147,6 @@ t/data/t1/version7.png
 t/data/t1/version8.png
 t/data/t1/version9.gif
 t/data/t1/version9.png
-t/data/t2.gif
-t/data/t2.png
 t/data/t2/version1.gif
 t/data/t2/version1.png
 t/data/t2/version10.png
@@ -176,8 +174,6 @@ t/data/t2/version6.png
 t/data/t2/version7.png
 t/data/t2/version8.png
 t/data/t2/version9.png
-t/data/t3.gif
-t/data/t3.png
 t/data/t3/version1.gif
 t/data/t3/version1.png
 t/data/t3/version10.gif
