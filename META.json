@@ -4,7 +4,7 @@
       "Lincoln Stein <lincoln.stein@oicr.on.ca>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.110440",
+   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.112150",
    "license" : [
       "perl_5"
    ],
@@ -35,7 +35,7 @@
    "provides" : {
       "Bio::Graphics" : {
          "file" : "lib/Bio/Graphics.pm",
-         "version" : "2.32"
+         "version" : "2.33"
       },
       "Bio::Graphics::ConfiguratorI" : {
          "file" : "lib/Bio/Graphics/ConfiguratorI.pm",
@@ -67,6 +67,10 @@
       },
       "Bio::Graphics::FileSplitter" : {
          "file" : "lib/Bio/Graphics/FeatureDir.pm",
+         "version" : 0
+      },
+      "Bio::Graphics::GDWrapper" : {
+         "file" : "lib/Bio/Graphics/GDWrapper.pm",
          "version" : 0
       },
       "Bio::Graphics::Glyph" : {
@@ -472,5 +476,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "2.32"
+   "version" : "2.33"
 }
