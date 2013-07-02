@@ -927,10 +927,18 @@ sub _get_cigar {
     return unless $cigar;
 
     my @arry;
-    while ($cigar =~ /(\d*)([A-Z])/g) {
-	my ($count,$op) = ($1,$2);
-	$count ||= 1;
-	push @arry,[$op,$count];
+    my $regexp = $cigar =~ /^\d+/ ? '(\d+)([A-Z])' 
+	                          : '([A-Z])(\d+)';
+    if ($cigar =~ /^\d+/) {
+	while ($cigar =~ /(\d+)([A-Z])/g) {
+	    my ($count,$op) = ($1,$2);
+	    push @arry,[$op,$count];
+	}
+    } else {
+	while ($cigar =~ /([A-Z])(\d+)/g) {
+	    my ($op,$count) = ($1,$2);
+	    push @arry,[$op,$count];
+	}
     }
     return \@arry;
 }
