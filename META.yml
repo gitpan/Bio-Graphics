@@ -15,7 +15,7 @@ name: Bio-Graphics
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.36
+    version: 2.37
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
     version: 0
@@ -81,6 +81,12 @@ provides:
     version: 0
   Bio::Graphics::Glyph::dashed_line:
     file: lib/Bio/Graphics/Glyph/dashed_line.pm
+    version: 0
+  Bio::Graphics::Glyph::decorated_gene:
+    file: lib/Bio/Graphics/Glyph/decorated_gene.pm
+    version: 0
+  Bio::Graphics::Glyph::decorated_transcript:
+    file: lib/Bio/Graphics/Glyph/decorated_transcript.pm
     version: 0
   Bio::Graphics::Glyph::diamond:
     file: lib/Bio/Graphics/Glyph/diamond.pm
@@ -349,4 +355,4 @@ requires:
   Statistics::Descriptive: 2.6
 resources:
   license: http://dev.perl.org/licenses/
-version: 2.36
+version: 2.37
