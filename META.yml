@@ -4,9 +4,9 @@ author:
   - 'Lincoln Stein <lincoln.stein@oicr.on.ca>'
 build_requires: {}
 configure_requires:
-  Module::Build: 0.40
+  Module::Build: 0.42
 dynamic_config: 1
-generated_by: 'Module::Build version 0.4005, CPAN::Meta::Converter version 2.112621'
+generated_by: 'Module::Build version 0.4205, CPAN::Meta::Converter version 2.120351'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -15,7 +15,7 @@ name: Bio-Graphics
 provides:
   Bio::Graphics:
     file: lib/Bio/Graphics.pm
-    version: 2.38
+    version: 2.39
   Bio::Graphics::ConfiguratorI:
     file: lib/Bio/Graphics/ConfiguratorI.pm
     version: 0
@@ -355,4 +355,4 @@ requires:
   Statistics::Descriptive: 2.6
 resources:
   license: http://dev.perl.org/licenses/
-version: 2.38
+version: 2.39
